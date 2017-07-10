@@ -383,7 +383,55 @@ function mklnntest.Dropout()
    
 end
 
+function mklnntest.LSTM_forward()
+   
+  local N, T, D, H = 3, 4, 5, 6
 
+  local h0 = torch.randn(N, H)
+  local c0 = torch.randn(N, H)
+  local x  = torch.randn(N, T, D)
+
+  local lstm = mklnn.LSTM(D, H)
+  local h = lstm:forward{c0, h0, x}
+
+  -- Do a naive forward pass
+  local naive_h = torch.Tensor(N, T, H)
+  local naive_c = torch.Tensor(N, T, H)
+
+  -- Unpack weight, bias for each gate
+  local Wxi = lstm.weight[{{1, D}, {1, H}}]
+  local Wxf = lstm.weight[{{1, D}, {H + 1, 2 * H}}]
+  local Wxo = lstm.weight[{{1, D}, {2 * H + 1, 3 * H}}]
+  local Wxg = lstm.weight[{{1, D}, {3 * H + 1, 4 * H}}]
+  
+  local Whi = lstm.weight[{{D + 1, D + H}, {1, H}}]
+  local Whf = lstm.weight[{{D + 1, D + H}, {H + 1, 2 * H}}]
+  local Who = lstm.weight[{{D + 1, D + H}, {2 * H + 1, 3 * H}}]
+  local Whg = lstm.weight[{{D + 1, D + H}, {3 * H + 1, 4 * H}}]
+  
+  local bi = lstm.bias[{{1, H}}]:view(1, H):expand(N, H)
+  local bf = lstm.bias[{{H + 1, 2 * H}}]:view(1, H):expand(N, H)
+  local bo = lstm.bias[{{2 * H + 1, 3 * H}}]:view(1, H):expand(N, H)
+  local bg = lstm.bias[{{3 * H + 1, 4 * H}}]:view(1, H):expand(N, H)
+
+  local prev_h, prev_c = h0:clone(), c0:clone()
+  for t = 1, T do
+    local xt = x[{{}, t}]
+    local i = torch.sigmoid(torch.mm(xt, Wxi) + torch.mm(prev_h, Whi) + bi)
+    local f = torch.sigmoid(torch.mm(xt, Wxf) + torch.mm(prev_h, Whf) + bf)
+    local o = torch.sigmoid(torch.mm(xt, Wxo) + torch.mm(prev_h, Who) + bo)
+    local g =    torch.tanh(torch.mm(xt, Wxg) + torch.mm(prev_h, Whg) + bg)
+    local next_c = torch.cmul(prev_c, f) + torch.cmul(i, g)
+    local next_h = torch.cmul(o, torch.tanh(next_c))
+    naive_h[{{}, t}] = next_h
+    naive_c[{{}, t}] = next_c
+    prev_h, prev_c = next_h, next_c
+  end
+  
+  mytester:assertTensorEq(naive_h, h, 1e-10)
+
+
+end
 
 mytester:add(mklnntest)
 jac = nn.Jacobian
