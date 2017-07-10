@@ -45,5 +45,10 @@ require('mklnn.Concat')
 require('mklnn.Concat2')
 require('mklnn.Dropout')
 
+
+
+require('mklnn.LSTM')
+require('mklnn.LSTMFullStep')
+
 mklnn.convert = require('mklnn.Convert')
 return mklnn

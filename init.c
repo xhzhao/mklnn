@@ -39,4 +39,8 @@
 #include "generateAllTypes.h"
 #include "src/Random.c"
 #include "generateAllTypes.h"
+#include "src/LSTM.c"
+#include "generateAllTypes.h"
+#include "src/LSTMFullStep.c"
+#include "generateAllTypes.h"
 
