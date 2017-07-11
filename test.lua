@@ -448,27 +448,30 @@ function mklnntest.LSTMFullStep_forward()
   local x  = torch.randn(N, T, D)
 
   local lstm = mklnn.LSTMFullStep(D, H)
-  local h = lstm:forward{c0, h0, x}
+  local output_table = lstm:forward{c0, h0, x}
+  local h = output_table[1]
+  local c = output_table[2]
 
   -- Do a naive forward pass
   local naive_h = torch.Tensor(N, T, H)
   local naive_c = torch.Tensor(N, T, H)
 
   -- Unpack weight, bias for each gate
-  local Wxi = lstm.weight[{{1, D}, {1, H}}]
-  local Wxf = lstm.weight[{{1, D}, {H + 1, 2 * H}}]
-  local Wxo = lstm.weight[{{1, D}, {2 * H + 1, 3 * H}}]
-  local Wxg = lstm.weight[{{1, D}, {3 * H + 1, 4 * H}}]
+  local Wxi = lstm.weightX[{{}, {1, H}}]
+  local Wxf = lstm.weightX[{{}, {H + 1, 2 * H}}]
+  local Wxo = lstm.weightX[{{}, {2 * H + 1, 3 * H}}]
+  local Wxg = lstm.weightX[{{}, {3 * H + 1, 4 * H}}]
   
-  local Whi = lstm.weight[{{D + 1, D + H}, {1, H}}]
-  local Whf = lstm.weight[{{D + 1, D + H}, {H + 1, 2 * H}}]
-  local Who = lstm.weight[{{D + 1, D + H}, {2 * H + 1, 3 * H}}]
-  local Whg = lstm.weight[{{D + 1, D + H}, {3 * H + 1, 4 * H}}]
+  local Whi = lstm.weightH[{{}, {1, H}}]
+  local Whf = lstm.weightH[{{}, {H + 1, 2 * H}}]
+  local Who = lstm.weightH[{{}, {2 * H + 1, 3 * H}}]
+  local Whg = lstm.weightH[{{}, {3 * H + 1, 4 * H}}]
   
   local bi = lstm.bias[{{1, H}}]:view(1, H):expand(N, H)
   local bf = lstm.bias[{{H + 1, 2 * H}}]:view(1, H):expand(N, H)
   local bo = lstm.bias[{{2 * H + 1, 3 * H}}]:view(1, H):expand(N, H)
   local bg = lstm.bias[{{3 * H + 1, 4 * H}}]:view(1, H):expand(N, H)
+
 
   local prev_h, prev_c = h0:clone(), c0:clone()
   for t = 1, T do
@@ -485,7 +488,7 @@ function mklnntest.LSTMFullStep_forward()
   end
   
   mytester:assertTensorEq(naive_h, h, 1e-10)
-
+  mytester:assertTensorEq(naive_c, c, 1e-10)
 end
 
 
