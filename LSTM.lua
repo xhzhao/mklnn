@@ -21,7 +21,8 @@ function LSTM:__init(input_dim, hidden_dim)
   local D, H = input_dim, hidden_dim
   self.input_dim, self.hidden_dim = D, H
 
-  self.weight = torch.Tensor(D + H, 4 * H)
+  self.weightX = torch.Tensor(D, 4 * H)
+  self.weightH = torch.Tensor(H, 4 * H)
   self.gradWeight = torch.Tensor(D + H, 4 * H):zero()
   self.bias = torch.Tensor(4 * H)
   self.gradBias = torch.Tensor(4 * H):zero()
@@ -50,8 +51,9 @@ function LSTM:reset(std)
     std = 1.0 / math.sqrt(self.hidden_dim + self.input_dim)
   end
   self.bias:zero()
-  self.bias[{{self.hidden_dim + 1, 2 * self.hidden_dim}}]:fill(1)
-  self.weight:normal(0, std)
+  --self.bias[{{self.hidden_dim + 1, 2 * self.hidden_dim}}]:fill(1)
+  self.weightX:normal(0, std)
+  self.weightH:normal(0, std)
   return self
 end
 
@@ -144,8 +146,8 @@ function LSTM:updateOutput(input)
   end
 
   local bias_expand = self.bias:view(1, 4 * H):expand(N, 4 * H)
-  local Wx = self.weight[{{1, D}}]
-  local Wh = self.weight[{{D + 1, D + H}}]
+  local Wx = self.weightX
+  local Wh = self.weightH
 
   local h, c = self.output, self.cell
   h:resize(N, T, H):zero()
@@ -171,7 +173,7 @@ function LSTM:updateOutput(input)
     prev_h, prev_c = next_h, next_c
   end
 
-  return self.output
+  return {h, c}
 end
 
 
@@ -188,8 +190,8 @@ function LSTM:backward(input, gradOutput, scale)
   local grad_h = gradOutput
 
   local N, T, D, H = self:_get_sizes(input, gradOutput)
-  local Wx = self.weight[{{1, D}}]
-  local Wh = self.weight[{{D + 1, D + H}}]
+  local Wx = self.weightX
+  local Wh = self.weightH
   local grad_Wx = self.gradWeight[{{1, D}}]
   local grad_Wh = self.gradWeight[{{D + 1, D + H}}]
   local grad_b = self.gradBias
