@@ -443,18 +443,18 @@ function mklnntest.LSTMFullStep_forward()
   -- N: batchsize, T: time step, D: input dim, H: output dim
   -- no layer size
 
-  local h0 = torch.randn(N, H)
-  local c0 = torch.randn(N, H)
-  local x  = torch.randn(N, T, D)
+  local h0 = torch.randn(N, H):float()
+  local c0 = torch.randn(N, H):float()
+  local x  = torch.randn(N, T, D):float()
 
-  local lstm = mklnn.LSTMFullStep(D, H)
+  local lstm = mklnn.LSTMFullStep(D, H):float()
   local output_table = lstm:forward{c0, h0, x}
   local h = output_table[1]
   local c = output_table[2]
 
   -- Do a naive forward pass
-  local naive_h = torch.Tensor(N, T, H)
-  local naive_c = torch.Tensor(N, T, H)
+  local naive_h = torch.Tensor(N, T, H):float()
+  local naive_c = torch.Tensor(N, T, H):float()
 
   -- Unpack weight, bias for each gate
   local Wxi = lstm.weightX[{{}, {1, H}}]
@@ -487,8 +487,8 @@ function mklnntest.LSTMFullStep_forward()
     prev_h, prev_c = next_h, next_c
   end
   
-  mytester:assertTensorEq(naive_h, h, 1e-10)
-  mytester:assertTensorEq(naive_c, c, 1e-10)
+  mytester:assertTensorEq(naive_h, h, 1e-6)
+  mytester:assertTensorEq(naive_c, c, 1e-6)
 end
 
 
