@@ -439,13 +439,13 @@ function mklnntest.LSTM_forward()
 end
 function mklnntest.LSTMFullStep_forward()
    
-  local N, T, D, H = 3, 4, 5, 6
+  local N, T, D, H = 3,4,5,6
   -- N: batchsize, T: time step, D: input dim, H: output dim
   -- no layer size
 
   local h0 = torch.randn(N, H):float()
   local c0 = torch.randn(N, H):float()
-  local x  = torch.randn(N, T, D):float()
+  local x  = torch.randn(T, N, D):float()
 
   local lstm = mklnn.LSTMFullStep(D, H):float()
   local output_table = lstm:forward{c0, h0, x}
@@ -453,8 +453,8 @@ function mklnntest.LSTMFullStep_forward()
   local c = output_table[2]
 
   -- Do a naive forward pass
-  local naive_h = torch.Tensor(N, T, H):float()
-  local naive_c = torch.Tensor(N, T, H):float()
+  local naive_h = torch.Tensor(T, N, H):float()
+  local naive_c = torch.Tensor(T, N, H):float()
 
   -- Unpack weight, bias for each gate
   local Wxi = lstm.weightX[{{}, {1, H}}]
@@ -475,15 +475,15 @@ function mklnntest.LSTMFullStep_forward()
 
   local prev_h, prev_c = h0:clone(), c0:clone()
   for t = 1, T do
-    local xt = x[{{}, t}]
+    local xt = x[{t, {}}]
     local i = torch.sigmoid(torch.mm(xt, Wxi) + torch.mm(prev_h, Whi) + bi)
     local f = torch.sigmoid(torch.mm(xt, Wxf) + torch.mm(prev_h, Whf) + bf)
     local o = torch.sigmoid(torch.mm(xt, Wxo) + torch.mm(prev_h, Who) + bo)
     local g =    torch.tanh(torch.mm(xt, Wxg) + torch.mm(prev_h, Whg) + bg)
     local next_c = torch.cmul(prev_c, f) + torch.cmul(i, g)
     local next_h = torch.cmul(o, torch.tanh(next_c))
-    naive_h[{{}, t}] = next_h
-    naive_c[{{}, t}] = next_c
+    naive_h[{t, {}}] = next_h
+    naive_c[{t, {}}] = next_c
     prev_h, prev_c = next_h, next_c
   end
   

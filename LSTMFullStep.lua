@@ -28,8 +28,8 @@ function LSTM:__init(input_dim, hidden_dim)
   self.gradBias = torch.Tensor(4 * H):zero()
   self:reset()
 
-  self.cell = torch.Tensor()    -- This will be (N, T, H)
-  self.gates = torch.Tensor()   -- This will be (N, T, 4H)
+  self.cell = torch.Tensor()    -- This will be (T, N, H)
+  self.gates = torch.Tensor()   -- This will be (T, N, 4H)
   self.buffer1 = torch.Tensor() -- This will be (N, H)
   self.buffer2 = torch.Tensor() -- This will be (N, H)
   self.buffer3 = torch.Tensor() -- This will be (1, 4H)
@@ -89,9 +89,9 @@ end
 
 function LSTM:_get_sizes(input, gradOutput)
   local c0, h0, x = self:_unpack_input(input)
-  local N, T = x:size(1), x:size(2)
+  local T, N = x:size(1), x:size(2)
   local H, D = self.hidden_dim, self.input_dim
-  check_dims(x, {N, T, D})
+  check_dims(x, {T, N, D})
   if h0 then
     check_dims(h0, {N, H})
   end
@@ -99,9 +99,9 @@ function LSTM:_get_sizes(input, gradOutput)
     check_dims(c0, {N, H})
   end
   if gradOutput then
-    check_dims(gradOutput, {N, T, H})
+    check_dims(gradOutput, {T, N, H})
   end
-  return N, T, D, H
+  return T, N, D, H
 end
 
 
@@ -120,7 +120,7 @@ function LSTM:updateOutput(input)
   print("mklnn.LSTM updateOutput")
   self.recompute_backward = true
   local c0, h0, x = self:_unpack_input(input)
-  local N, T, D, H = self:_get_sizes(input)
+  local T, N, D, H = self:_get_sizes(input)
 
   self._return_grad_c0 = (c0 ~= nil)
   self._return_grad_h0 = (h0 ~= nil)
@@ -150,17 +150,17 @@ function LSTM:updateOutput(input)
   local Wh = self.weightH
 
   local h, c = self.output, self.cell
-  h:resize(N, T, H):zero()
-  c:resize(N, T, H):zero()
+  h:resize(T, N, H):zero()
+  c:resize(T, N, H):zero()
   local prev_h, prev_c = h0, c0
-  self.gates:resize(N, T, 4 * H):zero()
+  self.gates:resize(T, N, 4 * H):zero()
 
   for t = 1, T do
-    local cur_x = x[{{}, t}]
-    local next_h = h[{{}, t}]
-    local next_c = c[{{}, t}]
+    local cur_x = x[{t,{}}]
+    local next_h = h[{t, {}}]
+    local next_c = c[{t, {}}]
 
-    local cur_gates = self.gates[{{}, t}]
+    local cur_gates = self.gates[{t, {}}]
     cur_gates:addmm(bias_expand, cur_x, Wx)
     cur_gates:addmm(prev_h, Wh)
     cur_gates[{{}, {1, 3 * H}}]:sigmoid()
@@ -175,8 +175,8 @@ function LSTM:updateOutput(input)
     prev_h, prev_c = next_h, next_c
   end
 
-  local next_h = h[{{}, T}]
-  local next_c = c[{{}, T}]
+  local next_h = h[{T, {}}]
+  local next_c = c[{T, {}}]
   return {h, c,next_h,next_c}
 end
 
