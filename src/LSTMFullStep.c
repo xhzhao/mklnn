@@ -3,6 +3,7 @@
 #else
 
 #include <math.h>
+#define LOG 0
 
 //gate: 0(it), 1(ft), 2(ot), 3(gt)
 static MKLNN_(LSTMFullStep_BatchGemmCrossStep)(
@@ -16,8 +17,9 @@ static MKLNN_(LSTMFullStep_BatchGemmCrossStep)(
   int H
 )
 {
+#if LOG
    printf("LSTMFullStep_BatchGemmCrossStep start, x = 0x%x, WX = 0x%x, output = 0x%x, T = %d, N = %d, D = %d, H = %d\n", x, WX, gates, T, N, D, H);
-
+#endif
    real * b = WX + gate * D * H;
    int t = 0;
    int m = N;
@@ -32,6 +34,7 @@ static MKLNN_(LSTMFullStep_BatchGemmCrossStep)(
       {
          cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1.0, a, k, b, n, 1.0, c, n);
       }
+/*
       if(t == 0){
 
       int i = 0;real tmp = 0;
@@ -54,7 +57,7 @@ static MKLNN_(LSTMFullStep_BatchGemmCrossStep)(
       }
       printf("t=1, xi * Wx = %.4f \n",tmp);
       }
-
+*/
       
    }
 
@@ -71,8 +74,9 @@ static MKLNN_(LSTMFullStep_BatchGemmStepInside)(
   int H
 )
 {
+#if LOG
    printf("LSTMFullStep_BatchGemmStepInside start, prev_h = 0x%x, WH = 0x%x, gates = 0x%x, T = %d, N = %d, D = %d, H = %d\n", prev_h, WH, gates, T, N, D, H);
-
+#endif
 
    int i = 0;
    int m = N;
@@ -88,6 +92,7 @@ static MKLNN_(LSTMFullStep_BatchGemmStepInside)(
       {
          cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1.0, a, k, b, n, 1.0, c, n);
       }
+/*
       if(t == 0){
 
       int j = 0;real tmp = 0;
@@ -109,10 +114,10 @@ static MKLNN_(LSTMFullStep_BatchGemmStepInside)(
       }
       printf("t=1, h * WH = %.4f \n",tmp);
       }
+*/
 
    }
 
-   printf("LSTMFullStep_BatchGemmStepInside end \n");
 }
 
 
@@ -138,15 +143,17 @@ void MKLNN_(LSTMFullStep_updateOutput)(
   THTensor * h0,
   THTensor * gates)
 {
-   printf("LSTMFullStep_updateOutput start\n");
+
    //get size: T, N, D
 
    int T = x->size[0];
    int N = x->size[1];
    int D = x->size[2];
    int H = h->size[2];
+#if LOG
+   printf("LSTMFullStep_updateOutput start\n");
    printf("T = %d, N = %d, D = %d, H = %d \n", T, N, D, H);
-
+#endif
 
    //create 4 buffer to save it, ft, ot, gt
 /*   real * it = malloc(T * N * H * sizeof(real));
@@ -166,6 +173,7 @@ void MKLNN_(LSTMFullStep_updateOutput)(
    memcpy(ot, bias, N * H * sizeof(real));
    memcpy(gt, bias, N * H * sizeof(real));
 
+/*
    int i =0;
    real tmp = 0;
    for(i=0; i<4 * N * H; i++)
@@ -173,6 +181,7 @@ void MKLNN_(LSTMFullStep_updateOutput)(
       tmp += it[i];
    }
    printf("bias check, sum = %.4f \n", tmp);
+*/
 
    //1. 4 batch gemm cross step size, Xt + WXi + bi, save result to it,ft,ot,gt
    MKLNN_(LSTMFullStep_BatchGemmCrossStep)(0, THTensor_(data)(x), THTensor_(data)(WX), it, T, N, D, H); 

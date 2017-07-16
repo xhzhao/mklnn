@@ -151,7 +151,6 @@ function LSTM:updateOutput(input)
   local Wx = self.weightX
   local Wh = self.weightH
 
-  print(" bias_expand size = ", bias_expand:size())
 
   local h, c = self.output, self.cell
   h:resize(T, N, H):zero()
@@ -168,7 +167,6 @@ function LSTM:updateOutput(input)
       c0:cdata(),
       h0:cdata(),
       self.gates:cdata())   
-  print("LSTMFullStep C kernel end")
 
 --xhzhao
 --[[
