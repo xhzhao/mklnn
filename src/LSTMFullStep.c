@@ -88,6 +88,27 @@ static MKLNN_(LSTMFullStep_BatchGemmStepInside)(
       {
          cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1.0, a, k, b, n, 1.0, c, n);
       }
+      if(t == 0){
+
+      int j = 0;real tmp = 0;
+      for(j=0; j < m*k; j++)
+      {
+         tmp+= a[j];
+      }
+      printf("t=1, h sum = %.4f \n", tmp);
+      tmp = 0;
+      for(j=0; j < k*n; j++)
+      {
+         tmp += b[j];
+      }
+      printf("t=1, WH sum = %.4f \n",tmp);
+      tmp = 0;
+      for(j=0; j < m*n; j++)
+      {
+         tmp += c[j];
+      }
+      printf("t=1, h * WH = %.4f \n",tmp);
+      }
 
    }
 
@@ -174,9 +195,9 @@ void MKLNN_(LSTMFullStep_updateOutput)(
       int j = 0;
       for(j = 0; j < N*H; j++)
       {
-         it[j] = 1 /(1 + exp(it[j]));
-         ft[j] = 1 /(1 + exp(ft[j]));
-         ot[j] = 1 /(1 + exp(ot[j]));
+         it[j] = 1 /(1 + exp(-it[j]));
+         ft[j] = 1 /(1 + exp(-ft[j]));
+         ot[j] = 1 /(1 + exp(-ot[j]));
          gt[j] = tanh( gt[j] );
       }
 
