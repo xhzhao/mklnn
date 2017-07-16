@@ -4,6 +4,7 @@
 
 #include <math.h>
 #define LOG 0
+#define BATCH_GEMM 1
 
 //gate: 0(it), 1(ft), 2(ot), 3(gt)
 static MKLNN_(LSTMFullStep_BatchGemmCrossStep)(
@@ -20,14 +21,41 @@ static MKLNN_(LSTMFullStep_BatchGemmCrossStep)(
 #if LOG
    printf("LSTMFullStep_BatchGemmCrossStep start, x = 0x%x, WX = 0x%x, output = 0x%x, T = %d, N = %d, D = %d, H = %d\n", x, WX, gates, T, N, D, H);
 #endif
-   real * b = WX + gate * D * H;
+
    int t = 0;
    int m = N;
    int n = H;
    int k = D;
+
+#if BATCH_GEMM
+   real ** A = (real **)malloc(T*sizeof(real*));
+   real ** B = (real **)malloc(T*sizeof(real*));
+   real ** C = (real **)malloc(T*sizeof(real*));
+   for(t = 0; t < T; t++)
+   {
+      A[t] = x + t * N * D;
+      B[t] = WX + gate * D * H;
+      C[t] = gates + t * N * 4 * H ;
+   }
+   CBLAS_TRANSPOSE    transA_g[1] = {CblasNoTrans};
+   CBLAS_TRANSPOSE    transB_g[1] = {CblasNoTrans}; 
+   int m_g[1] = {m};
+   int n_g[1] = {n};
+   int k_g[1] = {k};
+   int lda_g[1] = {k};
+   int ldb_g[1] = {n};
+   int ldc_g[1] = {n};
+   real alpha_g[1] = {1.0};
+   real beta_g[1] = {1.0};
+   int size_per_group[1] = {T};
+   cblas_sgemm_batch(CblasRowMajor, transA_g, transB_g, m_g, n_g, k_g, alpha_g, A, lda_g, B, ldb_g, beta_g, C, ldc_g, 1, size_per_group);
+
+#else
+
    for(t = 0; t < T; t++)
    {
       real * a = x + t * N * D;
+      real * b = WX + gate * D * H;
       real * c = gates + t * N * 4 * H ;
      
       if(sizeof(real) == sizeof(float))
@@ -60,6 +88,7 @@ static MKLNN_(LSTMFullStep_BatchGemmCrossStep)(
 */
       
    }
+#endif
 
 }
 
@@ -82,6 +111,30 @@ static MKLNN_(LSTMFullStep_BatchGemmStepInside)(
    int m = N;
    int n = H;
    int k = H;
+#if BATCH_GEMM
+   real ** A = (real **)malloc(4*sizeof(real*));
+   real ** B = (real **)malloc(4*sizeof(real*));
+   real ** C = (real **)malloc(4*sizeof(real*));
+   for(i = 0; i < 4; i++)
+   {
+      A[i] = prev_h;
+      B[i] = WH + i * H * H;
+      C[i] = gates + i * N * H;
+   }
+   CBLAS_TRANSPOSE    transA_g[1] = {CblasNoTrans};
+   CBLAS_TRANSPOSE    transB_g[1] = {CblasNoTrans};
+   int m_g[1] = {m};
+   int n_g[1] = {n};
+   int k_g[1] = {k};
+   int lda_g[1] = {k};
+   int ldb_g[1] = {n};
+   int ldc_g[1] = {n};
+   real alpha_g[1] = {1.0};
+   real beta_g[1] = {1.0};
+   int size_per_group[1] = {4};
+   cblas_sgemm_batch(CblasRowMajor, transA_g, transB_g, m_g, n_g, k_g, alpha_g, A, lda_g, B, ldb_g, beta_g, C, ldc_g, 1, size_per_group);
+
+#else
    for(i = 0; i < 4; i++)
    {
       real * a =  prev_h;
@@ -117,6 +170,7 @@ static MKLNN_(LSTMFullStep_BatchGemmStepInside)(
 */
 
    }
+#endif
 
 }
 
