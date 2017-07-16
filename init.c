@@ -6,6 +6,7 @@
 #include <omp.h>
 #include <sys/time.h>
 
+
 #include "luaT.h"
 #include "THStorage.h"
 #include "THTensor.h"
@@ -41,6 +42,9 @@
 #include "generateAllTypes.h"
 #include "src/LSTM.c"
 #include "generateAllTypes.h"
+
+
+#include "mkl.h"
 #include "src/LSTMFullStep.c"
 #include "generateAllTypes.h"
 

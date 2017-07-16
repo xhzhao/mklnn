@@ -1,6 +1,8 @@
 
 
 local LSTM, parent = torch.class('mklnn.LSTMFullStep', 'nn.Module')
+local wrapper = mklnn.wrapper
+local getType = mklnn.getType
 
 --[[
 If we add up the sizes of all the tensors for output, gradInput, weights,
@@ -21,8 +23,8 @@ function LSTM:__init(input_dim, hidden_dim)
   local D, H = input_dim, hidden_dim
   self.input_dim, self.hidden_dim = D, H
 
-  self.weightX = torch.Tensor(D, 4 * H)
-  self.weightH = torch.Tensor(H, 4 * H)
+  self.weightX = torch.Tensor(4,  D,  H)
+  self.weightH = torch.Tensor(4,  H,  H)
   self.gradWeight = torch.Tensor(D + H, 4 * H):zero()
   self.bias = torch.Tensor(4 * H)
   self.gradBias = torch.Tensor(4 * H):zero()
@@ -149,17 +151,36 @@ function LSTM:updateOutput(input)
   local Wx = self.weightX
   local Wh = self.weightH
 
+  print(" bias_expand size = ", bias_expand:size())
+
   local h, c = self.output, self.cell
   h:resize(T, N, H):zero()
   c:resize(T, N, H):zero()
   local prev_h, prev_c = h0, c0
   self.gates:resize(T, N, 4 * H):zero()
+  wrapper(getType(x),'LSTMFullStep_updateOutput',
+      x:cdata(),
+      Wx:cdata(),
+      Wh:cdata(),
+      bias_expand:cdata(),
+      c:cdata(),
+      h:cdata(),
+      c0:cdata(),
+      h0:cdata(),
+      self.gates:cdata())   
+  print("LSTMFullStep C kernel end")
 
+--xhzhao
+--[[
+  self.gates:zero()
   for t = 1, T do
     local cur_x = x[{t,{}}]
     local next_h = h[{t, {}}]
     local next_c = c[{t, {}}]
 
+    if t==1 then
+      print("LSTM OP x sum = ", cur_x:sum())
+    end
     local cur_gates = self.gates[{t, {}}]
     cur_gates:addmm(bias_expand, cur_x, Wx)
     cur_gates:addmm(prev_h, Wh)
@@ -174,6 +195,7 @@ function LSTM:updateOutput(input)
     next_h:tanh(next_c):cmul(o)
     prev_h, prev_c = next_h, next_c
   end
+]]--
 
   local next_h = h[{T, {}}]
   local next_c = c[{T, {}}]
@@ -199,6 +221,10 @@ function LSTM:backward(input, gradOutput, scale)
   local grad_Wx = self.gradWeight[{{1, D}}]
   local grad_Wh = self.gradWeight[{{D + 1, D + H}}]
   local grad_b = self.gradBias
+
+
+
+
 
   grad_h0:resizeAs(h0):zero()
   grad_c0:resizeAs(c0):zero()

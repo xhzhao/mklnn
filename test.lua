@@ -457,6 +457,16 @@ function mklnntest.LSTMFullStep_forward()
   local naive_c = torch.Tensor(T, N, H):float()
 
   -- Unpack weight, bias for each gate
+  local Wxi = lstm.weightX[1]
+  local Wxf = lstm.weightX[2]
+  local Wxo = lstm.weightX[3]
+  local Wxg = lstm.weightX[4]
+  
+  local Whi = lstm.weightH[1]
+  local Whf = lstm.weightH[2]
+  local Who = lstm.weightH[3]
+  local Whg = lstm.weightH[4]
+--[[
   local Wxi = lstm.weightX[{{}, {1, H}}]
   local Wxf = lstm.weightX[{{}, {H + 1, 2 * H}}]
   local Wxo = lstm.weightX[{{}, {2 * H + 1, 3 * H}}]
@@ -466,7 +476,8 @@ function mklnntest.LSTMFullStep_forward()
   local Whf = lstm.weightH[{{}, {H + 1, 2 * H}}]
   local Who = lstm.weightH[{{}, {2 * H + 1, 3 * H}}]
   local Whg = lstm.weightH[{{}, {3 * H + 1, 4 * H}}]
-  
+]]--  
+
   local bi = lstm.bias[{{1, H}}]:view(1, H):expand(N, H)
   local bf = lstm.bias[{{H + 1, 2 * H}}]:view(1, H):expand(N, H)
   local bo = lstm.bias[{{2 * H + 1, 3 * H}}]:view(1, H):expand(N, H)
@@ -476,6 +487,22 @@ function mklnntest.LSTMFullStep_forward()
   local prev_h, prev_c = h0:clone(), c0:clone()
   for t = 1, T do
     local xt = x[{t, {}}]
+   if t==1 then
+       print("test x sum = ", xt:sum())
+
+       local tmp = torch.mm(xt, Wxi)
+       print("test wxi sum = ", Wxi:sum())
+       print("t=1, it = ", tmp:sum())
+       tmp = torch.mm(xt, Wxf)
+       print("test wxf sum = ", Wxf:sum())
+       print("t=1, ft = ", tmp:sum())
+       tmp = torch.mm(xt, Wxo)
+       print("test wxo sum = ", Wxo:sum())
+       print("t=1, ot = ", tmp:sum())
+       tmp = torch.mm(xt, Wxg)
+       print("test wxg sum = ", Wxg:sum())
+       print("t=1, gt = ", tmp:sum())
+    end
     local i = torch.sigmoid(torch.mm(xt, Wxi) + torch.mm(prev_h, Whi) + bi)
     local f = torch.sigmoid(torch.mm(xt, Wxf) + torch.mm(prev_h, Whf) + bf)
     local o = torch.sigmoid(torch.mm(xt, Wxo) + torch.mm(prev_h, Who) + bo)

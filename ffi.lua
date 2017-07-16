@@ -196,6 +196,22 @@ void MKLNN_RealDropout_updateOutput(
   THRealTensor *input,
   THRealTensor *output,
   double p);
+
+
+void MKLNN_RealLSTMFullStep_updateOutput(
+  THRealTensor *input,
+  THRealTensor * WX,
+  THRealTensor * WH,
+  THRealTensor * bias,
+  THRealTensor * c,
+  THRealTensor * h,
+  THRealTensor * c0, 
+  THRealTensor * h0, 
+  THRealTensor * gates); 
+
+
+
+
 ]]
 
 local Real2real = {

@@ -1,0 +1,2 @@
+require 'mklnn'
+mklnn.test()
