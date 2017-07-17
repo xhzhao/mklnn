@@ -4,7 +4,7 @@
 
 #include <math.h>
 #define LOG 0
-#define BATCH_GEMM 1
+#define BATCH_GEMM 0
 
 //gate: 0(it), 1(ft), 2(ot), 3(gt)
 static MKLNN_(LSTMFullStep_BatchGemmCrossStep)(
@@ -215,14 +215,17 @@ void MKLNN_(LSTMFullStep_updateOutput)(
    real * ot = malloc(T * N * H * sizeof(real));
    real * gt = malloc(T * N * H * sizeof(real));
 */
+   gates = THTensor_(newContiguous)(gates);
+
    real * it = THTensor_(data)(gates);
    real * ft = it +     N * H;
    real * ot = it + 2 * N * H;
    real * gt = it + 3 * N * H;
 
    //copy bias to it,ft,ot,gt
+   Bias = THTensor_(newContiguous)(Bias);
    real * bias = THTensor_(data)(Bias);
-   memcpy(it, bias       , N * H * sizeof(real));
+   memcpy(it, bias, N * H * sizeof(real));
    memcpy(ft, bias, N * H * sizeof(real));
    memcpy(ot, bias, N * H * sizeof(real));
    memcpy(gt, bias, N * H * sizeof(real));
