@@ -6,7 +6,7 @@
 #define TNUM 50
 #define LOG 0
 #define BATCH_GEMM 1
-#define PROFILE 0
+#define PROFILE 1
 #define getTime(start,end) ((double)(end.tv_sec-start.tv_sec)*1000 + (double)(end.tv_usec-start.tv_usec)/1000)
 
 //gate: 0(it), 1(ft), 2(ot), 3(gt)
@@ -114,7 +114,7 @@ static MKLNN_(LSTMFullStep_BatchGemmStepInside)(
    int m = N;
    int n = H;
    int k = H;
-#if BATCH_GEMM
+#if 0
    real ** A = (real **)malloc(4*sizeof(real*));
    real ** B = (real **)malloc(4*sizeof(real*));
    real ** C = (real **)malloc(4*sizeof(real*));
@@ -183,14 +183,14 @@ static MKLNN_(LSTMFullStep_BatchGemmStepInside)(
 
 
 // input  :  T, N, D
-// WX size:     D, 4H
-// WH size:     H, 4H
+// WX size:  4, D, H
+// WH size:  4, H, H
 // bias size:   N, 4H
 // h  size:  T, N, H
 // c  size:  T, N, H
 // c0 size:     N, H
 // h0 size:     N, H
-
+// gatesize: T, N, 4H
 void MKLNN_(LSTMFullStep_updateOutput)(
   THTensor * x,  
   THTensor * WX,
