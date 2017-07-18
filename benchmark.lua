@@ -9,7 +9,8 @@ for i=1,100 do
   local c0 = torch.randn(N, H):float()
   local x  = torch.randn(T, N, D):float()
 
-
+  sys.tic()
   local output_table = lstm:forward{c0, h0, x}
+  print("Lua time = ",sys.toc())
 end
 

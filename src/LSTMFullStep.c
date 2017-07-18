@@ -272,11 +272,15 @@ void MKLNN_(LSTMFullStep_updateOutput)(
       real * next_h = THTensor_(data)(h) + t * N * H;
       //2. batch gemm in one step
       // gates = prev_h * WH
+#if PROFILE
       struct timeval tmp1,tmp2;
       gettimeofday(&tmp1,NULL);
       MKLNN_(LSTMFullStep_BatchGemmStepInside)(t, prev_h, THTensor_(data)(WH), it, T, N, D, H) ;
       gettimeofday(&tmp2,NULL);
       gemm2_time += getTime(tmp1, tmp2);
+#else
+      MKLNN_(LSTMFullStep_BatchGemmStepInside)(t, prev_h, THTensor_(data)(WH), it, T, N, D, H) ;
+#endif
       //3. Sigmoid on it,ft,ot, Tanh on gt, size = N * H * 3
 
       #pragma omp parallel num_threads(TNUM)
