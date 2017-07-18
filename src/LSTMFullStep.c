@@ -3,8 +3,11 @@
 #else
 
 #include <math.h>
+#define TNUM 50
 #define LOG 0
-#define BATCH_GEMM 0
+#define BATCH_GEMM 1
+#define PROFILE 0
+#define getTime(start,end) ((double)(end.tv_sec-start.tv_sec)*1000 + (double)(end.tv_usec-start.tv_usec)/1000)
 
 //gate: 0(it), 1(ft), 2(ot), 3(gt)
 static MKLNN_(LSTMFullStep_BatchGemmCrossStep)(
@@ -143,7 +146,9 @@ static MKLNN_(LSTMFullStep_BatchGemmStepInside)(
 
       if(sizeof(real) == sizeof(float))
       {
+         //mkl_set_num_threads(18);
          cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1.0, a, k, b, n, 1.0, c, n);
+         //mkl_set_num_threads(72);
       }
 /*
       if(t == 0){
@@ -197,7 +202,10 @@ void MKLNN_(LSTMFullStep_updateOutput)(
   THTensor * h0,
   THTensor * gates)
 {
-
+#if PROFILE
+   struct timeval start,mid1,mid2, end;
+   gettimeofday(&start,NULL);
+#endif
    //get size: T, N, D
 
    int T = x->size[0];
@@ -207,6 +215,7 @@ void MKLNN_(LSTMFullStep_updateOutput)(
 #if LOG
    printf("LSTMFullStep_updateOutput start\n");
    printf("T = %d, N = %d, D = %d, H = %d \n", T, N, D, H);
+
 #endif
 
    //create 4 buffer to save it, ft, ot, gt
@@ -229,6 +238,9 @@ void MKLNN_(LSTMFullStep_updateOutput)(
    memcpy(ft, bias, N * H * sizeof(real));
    memcpy(ot, bias, N * H * sizeof(real));
    memcpy(gt, bias, N * H * sizeof(real));
+#if PROFILE
+   gettimeofday(&mid1,NULL);
+#endif
 
 /*
    int i =0;
@@ -245,6 +257,10 @@ void MKLNN_(LSTMFullStep_updateOutput)(
    MKLNN_(LSTMFullStep_BatchGemmCrossStep)(1, THTensor_(data)(x), THTensor_(data)(WX), ft, T, N, D, H); 
    MKLNN_(LSTMFullStep_BatchGemmCrossStep)(2, THTensor_(data)(x), THTensor_(data)(WX), ot, T, N, D, H); 
    MKLNN_(LSTMFullStep_BatchGemmCrossStep)(3, THTensor_(data)(x), THTensor_(data)(WX), gt, T, N, D, H); 
+#if PROFILE
+   gettimeofday(&mid2,NULL);
+   double gemm2_time = 0;
+#endif
 
    int t = 0;
    real * prev_c = THTensor_(data)(c0);
@@ -256,33 +272,44 @@ void MKLNN_(LSTMFullStep_updateOutput)(
       real * next_h = THTensor_(data)(h) + t * N * H;
       //2. batch gemm in one step
       // gates = prev_h * WH
+      struct timeval tmp1,tmp2;
+      gettimeofday(&tmp1,NULL);
       MKLNN_(LSTMFullStep_BatchGemmStepInside)(t, prev_h, THTensor_(data)(WH), it, T, N, D, H) ;
+      gettimeofday(&tmp2,NULL);
+      gemm2_time += getTime(tmp1, tmp2);
       //3. Sigmoid on it,ft,ot, Tanh on gt, size = N * H * 3
-      int j = 0;
-      for(j = 0; j < N*H; j++)
-      {
-         it[j] = 1 /(1 + exp(-it[j]));
-         ft[j] = 1 /(1 + exp(-ft[j]));
-         ot[j] = 1 /(1 + exp(-ot[j]));
-         gt[j] = tanh( gt[j] );
-      }
 
-      //4. ct, ht update
-      for(j = 0; j < N*H; j++)
+      #pragma omp parallel num_threads(TNUM)
       {
-         next_c[j] = ft[j] * prev_c[j] + it[j] * gt[j];
-         next_h[j] = ot[j] * tanh(next_c[j]);
+         int tid = omp_get_thread_num();
+         int j = 0;
+         int block_num = (N*H)/TNUM;
+         #pragma ivdep
+         for(j = tid * block_num; j < (tid +1)*block_num; j++)
+         {
+            it[j] = 1 /(1 + exp(-it[j]));
+            ft[j] = 1 /(1 + exp(-ft[j]));
+            ot[j] = 1 /(1 + exp(-ot[j]));
+            gt[j] = tanh( gt[j] );
+
+         //4. ct, ht update
+            next_c[j] = ft[j] * prev_c[j] + it[j] * gt[j];
+            next_h[j] = ot[j] * tanh(next_c[j]);
+         }
       }
 
       it = it +  N * 4 * H;
       ft = ft +  N * 4 * H;
       ot = ot +  N * 4 * H;
       gt = gt +  N * 4 * H;
-#if 1
       prev_h = next_h;
       prev_c = next_c;
-#endif
    }
+#if PROFILE
+   gettimeofday(&end,NULL);
+   printf("LSTM C profile, total = %.4f, init = %.4f, batchGEMM = %.4f, GEMM2 = %.4f, else = %.4f\n",getTime(start,end), getTime(start,mid1), getTime(mid1,mid2), gemm2_time, getTime(mid2,end)-gemm2_time);
+#endif
+   
 }
 
 

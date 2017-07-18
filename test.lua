@@ -439,7 +439,7 @@ function mklnntest.LSTM_forward()
 end
 function mklnntest.LSTMFullStep_forward()
    
-  local N, T, D, H = 3,4,5,6
+  local N, T, D, H = 64,32,500,500
   -- N: batchsize, T: time step, D: input dim, H: output dim
   -- no layer size
 
