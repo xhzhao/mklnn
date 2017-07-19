@@ -492,6 +492,68 @@ function mklnntest.LSTMFullStep_forward()
 end
 
 
+local gradcheck = require 'gradcheck'
+function mklnntest.LSTMFullStep_backward()
+
+  local N, T, D, H = 2, 3, 4, 5
+
+  local x = torch.randn( T, N, D)
+  local h0 = torch.randn(N, H)
+  local c0 = torch.randn(N, H)
+  
+  local lstm = mklnn.LSTMFullStep(D, H)
+  local rtn = lstm:forward{c0, h0, x}
+
+  h = rtn[1]
+  local dh = torch.randn(#h)
+
+  lstm:zeroGradParameters()
+  local dc0, dh0, dx = unpack(lstm:backward({c0, h0, x}, dh))
+  local dw = lstm.gradWeight:clone()
+  local db = lstm.gradBias:clone()
+
+  local function fx(x)   return lstm:forward{c0, h0, x}[1] end 
+  local function fh0(h0) return lstm:forward{c0, h0, x}[1] end 
+  local function fc0(c0) return lstm:forward{c0, h0, x}[1] end 
+
+  local function fw(w)
+    local old_w = lstm.weight
+    lstm.weight = w 
+    local out = lstm:forward{c0, h0, x}[1]
+    lstm.weight = old_w
+    return out 
+  end 
+
+  local function fb(b)
+    local old_b = lstm.bias
+    lstm.bias = b 
+    local out = lstm:forward{c0, h0, x}[1]
+    lstm.bias = old_b
+    return out 
+  end 
+
+  local dx_num = gradcheck.numeric_gradient(fx, x, dh) 
+  local dh0_num = gradcheck.numeric_gradient(fh0, h0, dh) 
+  local dc0_num = gradcheck.numeric_gradient(fc0, c0, dh) 
+  local dw_num = gradcheck.numeric_gradient(fw, lstm.weight, dh) 
+  local db_num = gradcheck.numeric_gradient(fb, lstm.bias, dh) 
+
+  local dx_error = gradcheck.relative_error(dx_num, dx) 
+  local dh0_error = gradcheck.relative_error(dh0_num, dh0)
+  local dc0_error = gradcheck.relative_error(dc0_num, dc0)
+  local dw_error = gradcheck.relative_error(dw_num, dw) 
+  local db_error = gradcheck.relative_error(db_num, db) 
+
+  mytester:assertle(dh0_error, 1e-4)
+  mytester:assertle(dc0_error, 1e-5)
+  mytester:assertle(dx_error, 1e-5)
+  mytester:assertle(dw_error, 1e-4)
+  mytester:assertle(db_error, 1e-5)
+
+end
+
+
+
 mytester:add(mklnntest)
 jac = nn.Jacobian
 sjac = nn.SparseJacobian

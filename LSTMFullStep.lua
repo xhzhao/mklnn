@@ -21,8 +21,10 @@ function LSTM:__init(input_dim, hidden_dim)
   local D, H = input_dim, hidden_dim
   self.input_dim, self.hidden_dim = D, H
 
-  self.weightX = torch.Tensor(D, 4 * H)
-  self.weightH = torch.Tensor(H, 4 * H)
+  self.weight = torch.Tensor(D+H, 4 * H)
+  self.weightX = self.weight[{{1,D}}]
+  self.weightH = self.weight[{{D+1,D+H}}]
+
   self.gradWeight = torch.Tensor(D + H, 4 * H):zero()
   self.bias = torch.Tensor(4 * H)
   self.gradBias = torch.Tensor(4 * H):zero()
@@ -117,7 +119,7 @@ Output:
 
 
 function LSTM:updateOutput(input)
-  print("mklnn.LSTM updateOutput")
+  --print("mklnn.LSTM updateOutput")
   self.recompute_backward = true
   local c0, h0, x = self:_unpack_input(input)
   local T, N, D, H = self:_get_sizes(input)
@@ -193,7 +195,7 @@ function LSTM:backward(input, gradOutput, scale)
   local h, c = self.output, self.cell
   local grad_h = gradOutput
 
-  local N, T, D, H = self:_get_sizes(input, gradOutput)
+  local T, N, D, H = self:_get_sizes(input, gradOutput)
   local Wx = self.weightX
   local Wh = self.weightH
   local grad_Wx = self.gradWeight[{{1, D}}]
@@ -206,19 +208,19 @@ function LSTM:backward(input, gradOutput, scale)
   local grad_next_h = self.buffer1:resizeAs(h0):zero()
   local grad_next_c = self.buffer2:resizeAs(c0):zero()
   for t = T, 1, -1 do
-    local next_h, next_c = h[{{}, t}], c[{{}, t}]
+    local next_h, next_c = h[{t, {}}], c[{t, {}}]
     local prev_h, prev_c = nil, nil
     if t == 1 then
       prev_h, prev_c = h0, c0
     else
-      prev_h, prev_c = h[{{}, t - 1}], c[{{}, t - 1}]
+      prev_h, prev_c = h[{t-1, {}}], c[{t-1, {}}]
     end
-    grad_next_h:add(grad_h[{{}, t}])
+    grad_next_h:add(grad_h[{t,{}}])
 
-    local i = self.gates[{{}, t, {1, H}}]
-    local f = self.gates[{{}, t, {H + 1, 2 * H}}]
-    local o = self.gates[{{}, t, {2 * H + 1, 3 * H}}]
-    local g = self.gates[{{}, t, {3 * H + 1, 4 * H}}]
+    local i = self.gates[{t, {}, {1, H}}]
+    local f = self.gates[{t, {}, {H + 1, 2 * H}}]
+    local o = self.gates[{t, {}, {2 * H + 1, 3 * H}}]
+    local g = self.gates[{t, {}, {3 * H + 1, 4 * H}}]
     
     local grad_a = self.grad_a_buffer:resize(N, 4 * H):zero()
     local grad_ai = grad_a[{{}, {1, H}}]
@@ -248,8 +250,8 @@ function LSTM:backward(input, gradOutput, scale)
     grad_ai:fill(1):add(-1, i):cmul(i):cmul(g):cmul(grad_next_c)
     grad_af:fill(1):add(-1, f):cmul(f):cmul(prev_c):cmul(grad_next_c)
     
-    grad_x[{{}, t}]:mm(grad_a, Wx:t())
-    grad_Wx:addmm(scale, x[{{}, t}]:t(), grad_a)
+    grad_x[{t, {}}]:mm(grad_a, Wx:t())
+    grad_Wx:addmm(scale, x[{t, {}}]:t(), grad_a)
     grad_Wh:addmm(scale, prev_h:t(), grad_a)
     local grad_a_sum = self.buffer3:resize(1, 4 * H):sum(grad_a, 1)
     grad_b:add(scale, grad_a_sum)
