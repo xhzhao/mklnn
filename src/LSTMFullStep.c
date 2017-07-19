@@ -6,7 +6,7 @@
 #define TNUM 50
 #define LOG 0
 #define BATCH_GEMM 1
-#define PROFILE 1
+#define PROFILE 0
 #define getTime(start,end) ((double)(end.tv_sec-start.tv_sec)*1000 + (double)(end.tv_usec-start.tv_usec)/1000)
 
 //gate: 0(it), 1(ft), 2(ot), 3(gt)
@@ -183,8 +183,8 @@ static MKLNN_(LSTMFullStep_BatchGemmStepInside)(
 
 
 // input  :  T, N, D
-// WX size:  4, D, H
-// WH size:  4, H, H
+// WX size:    4D, H
+// WH size:    4H, H
 // bias size:   N, 4H
 // h  size:  T, N, H
 // c  size:  T, N, H

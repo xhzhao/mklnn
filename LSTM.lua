@@ -117,7 +117,7 @@ Output:
 
 
 function LSTM:updateOutput(input)
-  print("mklnn.LSTM updateOutput")
+  --print("mklnn.LSTM updateOutput")
   self.recompute_backward = true
   local c0, h0, x = self:_unpack_input(input)
   local N, T, D, H = self:_get_sizes(input)
