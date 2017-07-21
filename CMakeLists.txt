@@ -10,6 +10,11 @@ ENDIF()
 
 FIND_PACKAGE(Torch REQUIRED)
 
+set(CMAKE_C_COMPILER icc)
+IF (NOT WIN32)
+SET(CMAKE_C_FLAGS "-std=c99 -Werror=implicit-function-declaration -qopenmp -O3 ${CMAKE_C_FLAGS}")
+ENDIF (NOT WIN32)
+
 INCLUDE_DIRECTORIES("${Torch_INSTALL_INCLUDE}/mkltorch")
 LINK_DIRECTORIES("${Torch_INSTALL_LIB}")
 #MESSAGE("mkltorch path =  ${Torch_INSTALL_INCLUDE}/mkltorch, mkl path = $ENV{MKLML_LIBRARY}")
