@@ -1,6 +1,8 @@
 
 
 local LSTM, parent = torch.class('mklnn.LSTMFullStep', 'nn.Module')
+local wrapper = mklnn.wrapper
+local getType = mklnn.getType
 
 --[[
 If we add up the sizes of all the tensors for output, gradInput, weights,
@@ -24,6 +26,10 @@ function LSTM:__init(input_dim, hidden_dim)
   self.weight = torch.Tensor(D+H, 4 * H)
   self.weightX = self.weight[{{1,D}}]
   self.weightH = self.weight[{{D+1,D+H}}]
+
+  self.Wx_t = torch.Tensor(4,D,H)
+  self.Wh_t = torch.Tensor(4,H,H)
+  self.gates_t = torch.Tensor()
 
   self.gradWeight = torch.Tensor(D + H, 4 * H):zero()
   self.bias = torch.Tensor(4 * H)
@@ -157,12 +163,44 @@ function LSTM:updateOutput(input)
   local prev_h, prev_c = h0, c0
   self.gates:resize(T, N, 4 * H):zero()
 
+  self.Wx_t[1] = Wx[{{}, {1, H}}]
+  self.Wx_t[2] = Wx[{{}, {H + 1, 2 * H}}]
+  self.Wx_t[3] = Wx[{{}, {2 * H + 1, 3 * H}}]
+  self.Wx_t[4] = Wx[{{}, {3 * H + 1, 4 * H}}]
+
+  self.Wh_t[1] = Wh[{{}, {1, H}}]
+  self.Wh_t[2] = Wh[{{}, {H + 1, 2 * H}}]
+  self.Wh_t[3] = Wh[{{}, {2 * H + 1, 3 * H}}]
+  self.Wh_t[4] = Wh[{{}, {3 * H + 1, 4 * H}}]
+
+
+  self.gates_mkl = torch.Tensor()
+  self.gates_mkl:resize(T, 4 * N, H):zero()
+  wrapper(getType(x),'LSTMFullStep_updateOutput',
+      x:cdata(),
+      self.Wx_t:cdata(),
+      self.Wh_t:cdata(),
+      bias_expand:cdata(),
+      c:cdata(),
+      h:cdata(),
+      c0:cdata(),
+      h0:cdata(),
+      self.gates_mkl:cdata())
+
+  self.gates[{{1,T}, {1,N}, {1, H}}]           = self.gates_mkl[{{1,T},{1,N},           {1,H}}]
+  self.gates[{{1,T}, {1,N}, {H + 1, 2 * H}}]   = self.gates_mkl[{{1,T},{N + 1, 2 * N},  {1,H}}]
+  self.gates[{{1,T}, {1,N}, {2*H + 1, 3 * H}}] = self.gates_mkl[{{1,T},{2*N + 1, 3 * N},{1,H}}]
+  self.gates[{{1,T}, {1,N}, {3*H + 1, 4 * H}}] = self.gates_mkl[{{1,T},{3*N + 1, 4 * N},{1,H}}]
+
+
+--[[
+
   for t = 1, T do
     local cur_x = x[{t,{}}]
-    local next_h = h[{t, {}}]
-    local next_c = c[{t, {}}]
+    local next_h = h_ori[{t, {}}]
+    local next_c = c_ori[{t, {}}]
 
-    local cur_gates = self.gates[{t, {}}]
+    local cur_gates = self.gates_ori[{t, {}}]
     cur_gates:addmm(bias_expand, cur_x, Wx)
     cur_gates:addmm(prev_h, Wh)
     cur_gates[{{}, {1, 3 * H}}]:sigmoid()
@@ -176,6 +214,14 @@ function LSTM:updateOutput(input)
     next_h:tanh(next_c):cmul(o)
     prev_h, prev_c = next_h, next_c
   end
+
+
+  local check_1 = torch.all(torch.lt(torch.abs(torch.add(h_ori, -h_mkl)), 1e-6))
+  local check_2 = torch.all(torch.lt(torch.abs(torch.add(c_ori, -c_mkl)), 1e-6))
+  local check_3 = torch.all(torch.lt(torch.abs(torch.add(self.gates_ori, -self.gates_mkl)), 1e-6))
+  print("result check = ",check_1, check_2, check_3)
+]]--
+
 
   local next_h = h[{T, {}}]
   local next_c = c[{T, {}}]

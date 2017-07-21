@@ -41,6 +41,9 @@
 #include "generateAllTypes.h"
 #include "src/LSTM.c"
 #include "generateAllTypes.h"
+
+#include "mkl.h"
 #include "src/LSTMFullStep.c"
 #include "generateAllTypes.h"
+
 
