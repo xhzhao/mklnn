@@ -38,6 +38,7 @@ function LSTM:__init(input_dim, hidden_dim)
 
   self.cell = torch.Tensor()    -- This will be (T, N, H)
   self.gates = torch.Tensor()   -- This will be (T, N, 4H)
+  self.gates_mkl = torch.Tensor()
   self.buffer1 = torch.Tensor() -- This will be (N, H)
   self.buffer2 = torch.Tensor() -- This will be (N, H)
   self.buffer3 = torch.Tensor() -- This will be (1, 4H)
@@ -58,8 +59,8 @@ function LSTM:reset(std)
   if not std then
     std = 1.0 / math.sqrt(self.hidden_dim + self.input_dim)
   end
-  self.bias:fill(1)
-  self.bias[{{self.hidden_dim + 1, 2 * self.hidden_dim}}]:fill(1)
+  self.bias:zero()
+  --self.bias[{{self.hidden_dim + 1, 2 * self.hidden_dim}}]:fill(1)
   self.weightX:normal(0, std)
   self.weightH:normal(0, std)
   return self
@@ -153,7 +154,7 @@ function LSTM:updateOutput(input)
     end
   end
 
-  local bias_expand = self.bias:view(1, 4 * H):expand(N, 4 * H):fill(1)
+  local bias_expand = self.bias:view(1, 4 * H):expand(N, 4 * H)
   local Wx = self.weightX
   local Wh = self.weightH
 
@@ -174,7 +175,7 @@ function LSTM:updateOutput(input)
   self.Wh_t[4] = Wh[{{}, {3 * H + 1, 4 * H}}]
 
 
-  self.gates_mkl = torch.Tensor()
+
   self.gates_mkl:resize(T, 4 * N, H):zero()
   wrapper(getType(x),'LSTMFullStep_updateOutput',
       x:cdata(),

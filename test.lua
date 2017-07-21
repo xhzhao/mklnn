@@ -555,7 +555,6 @@ function mklnntest.LSTMFullStep_backward()
 
 end
 
-
 mytester:add(mklnntest)
 jac = nn.Jacobian
 sjac = nn.SparseJacobian
