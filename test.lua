@@ -490,7 +490,7 @@ function mklnntest.LSTMFullStep_forward()
   mytester:assertTensorEq(naive_c, c, 1e-6)
 end
 
-local gradcheck = require 'gradcheck'
+
 function mklnntest.LSTMFullStep_backward()
 
   local N, T, D, H = 2, 3, 4, 5

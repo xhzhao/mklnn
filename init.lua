@@ -2,6 +2,7 @@ require 'nn'
 require 'mkltorch'
 mklnn= require 'mklnn.env'
 require('mklnn.ffi')
+gradcheck = require 'mklnn.gradcheck'
 
 local C = mklnn.C
 local ffi = require 'ffi'
