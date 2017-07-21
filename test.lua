@@ -472,7 +472,6 @@ function mklnntest.LSTMFullStep_forward()
   local bo = lstm.bias[{{2 * H + 1, 3 * H}}]:view(1, H):expand(N, H)
   local bg = lstm.bias[{{3 * H + 1, 4 * H}}]:view(1, H):expand(N, H)
 
-
   local prev_h, prev_c = h0:clone(), c0:clone()
   for t = 1, T do
     local xt = x[{t, {}}]
@@ -490,7 +489,6 @@ function mklnntest.LSTMFullStep_forward()
   mytester:assertTensorEq(naive_h, h, 1e-6)
   mytester:assertTensorEq(naive_c, c, 1e-6)
 end
-
 
 local gradcheck = require 'gradcheck'
 function mklnntest.LSTMFullStep_backward()
@@ -556,7 +554,6 @@ function mklnntest.LSTMFullStep_backward()
   --mytester:assertle(db_error, 1e-5)
 
 end
-
 
 
 mytester:add(mklnntest)

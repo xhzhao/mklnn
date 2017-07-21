@@ -248,23 +248,18 @@ void MKLNN_(LSTMFullStep_updateOutput)(
    //copy bias to it,ft,ot,gt
    Bias = THTensor_(newContiguous)(Bias);
    real * bias = THTensor_(data)(Bias);
-   memcpy(it, bias, N * H * sizeof(real));
-   memcpy(ft, bias, N * H * sizeof(real));
-   memcpy(ot, bias, N * H * sizeof(real));
-   memcpy(gt, bias, N * H * sizeof(real));
+   int i =0;
+   for(i=0; i< T; i++)
+   {
+      memcpy(it + i*4*N*H, bias, N * H * sizeof(real));
+      memcpy(ft + i*4*N*H, bias, N * H * sizeof(real));
+      memcpy(ot + i*4*N*H, bias, N * H * sizeof(real));
+      memcpy(gt + i*4*N*H, bias, N * H * sizeof(real));
+   }
 #if PROFILE
    gettimeofday(&mid1,NULL);
 #endif
 
-/*
-   int i =0;
-   real tmp = 0;
-   for(i=0; i<4 * N * H; i++)
-   {
-      tmp += it[i];
-   }
-   printf("bias check, sum = %.4f \n", tmp);
-*/
 
    //1. 4 batch gemm cross step size, Xt + WXi + bi, save result to it,ft,ot,gt
    MKLNN_(LSTMFullStep_BatchGemmCrossStep)(0, THTensor_(data)(x), THTensor_(data)(WX), it, T, N, D, H); 
