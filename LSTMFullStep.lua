@@ -264,6 +264,7 @@ function LSTM:backward(input, gradOutput, scale)
   local grad_Wx_mkl = grad_Wx:clone()
   local grad_Wh_mkl = grad_Wh:clone()
 
+--[[
   print("x size = ", x:size())
   print("self.Wx_t size = ", self.Wx_t:size())
   print("self.Wh_t size = ", self.Wh_t:size())
@@ -272,8 +273,8 @@ function LSTM:backward(input, gradOutput, scale)
   print("grad_b_mkl size = ", grad_b_mkl:size())
   print("grad_c0_mkl size = ", grad_c0_mkl:size())
   print("grad_h0_mkl size = ", grad_h0_mkl:size())
-
   print("self.gates_mkl size = ", self.gates_mkl:size())
+]]--
 
   self.grad_a_buffer1:resize(N, 4 * H):zero()
   self.grad_a_buffer2:resize(N, 4 * H):zero()
@@ -298,7 +299,7 @@ function LSTM:backward(input, gradOutput, scale)
 )
   
 
-
+--[[
   for t = T, 1, -1 do
     local next_h, next_c = h[{t, {}}], c[{t, {}}]
     local prev_h, prev_c = nil, nil
@@ -324,14 +325,6 @@ function LSTM:backward(input, gradOutput, scale)
     -- to to compute grad_next_c. We will need tanh_next_c (stored in grad_ai)
     -- to compute grad_ao; the other values can be overwritten after we compute
     -- grad_next_c
---[[
-    if t==T-1 then
-      print("next_c sum  = ",next_c:sum())
-      print("grad_next_h sum = ",grad_next_h:sum())
-      print("ot sum = ",o:sum())
-      
-    end
-]]--
     local tanh_next_c = grad_ai:tanh(next_c)
     local tanh_next_c2 = grad_af:cmul(tanh_next_c, tanh_next_c)
     local my_grad_next_c = grad_ao
@@ -361,7 +354,7 @@ function LSTM:backward(input, gradOutput, scale)
 
     grad_next_h:mm(grad_a, Wh:t())
     grad_next_c:cmul(f)
-    --if t==T-1 then
+    
       print("---------------------------------------t = ",t)
       print("grad_ao sum = ",grad_ao:sum())
       print("grad_ag sum = ",grad_ag:sum())
@@ -374,10 +367,14 @@ function LSTM:backward(input, gradOutput, scale)
       print("grad_Wh sum = ",grad_Wh:sum())
       print("grad_next_h sum = ",grad_next_h:sum())
       print("grad_next_c sum = ",grad_next_c:sum())
-    --end
+   
   end
-  grad_h0:copy(grad_next_h)
-  grad_c0:copy(grad_next_c)
+]]--
+  grad_h0:copy(grad_h0_mkl)
+  grad_c0:copy(grad_c0_mkl)
+  self.grad_x:copy(grad_x_mkl)
+  grad_Wx:copy(grad_Wx_mkl)
+  grad_Wh:copy(grad_Wh_mkl)
 
   if self._return_grad_c0 and self._return_grad_h0 then
     self.gradInput = {self.grad_c0, self.grad_h0, self.grad_x}
@@ -387,6 +384,7 @@ function LSTM:backward(input, gradOutput, scale)
     self.gradInput = self.grad_x
   end
 
+--[[
   local check_1 = torch.all(torch.lt(torch.abs(torch.add(grad_c0,   -grad_c0_mkl)), 1e-6))
   local check_2 = torch.all(torch.lt(torch.abs(torch.add(grad_h0,   -grad_h0_mkl)), 1e-6))
   local check_3 = torch.all(torch.lt(torch.abs(torch.add(grad_x, -grad_x_mkl)), 1e-6))
@@ -396,6 +394,7 @@ function LSTM:backward(input, gradOutput, scale)
   print("grad_c0 = ",grad_c0:sum()," grad_c0_mkl sum = ",grad_c0_mkl:sum())
   print("grad_h0 = ",grad_h0:sum()," grad_h0_mkl sum = ",grad_h0_mkl:sum())
   print("grad_x = ",grad_x:sum()," grad_x_mkl sum = ",grad_x_mkl:sum())
+]]--
 
   return self.gradInput
 end

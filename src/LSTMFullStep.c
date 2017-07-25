@@ -589,15 +589,6 @@ void MKLNN_(LSTMFullStep_updateGradInput)(
       }
       grad_ht = grad_h + t*N*H;
       MKLNN_(LSTMFullStep_Add)(grad_next_h,grad_ht,N*H);
-/*
-      if(t == T-2)
-      {
-         MKLNN_(LSTMFullStep_PrintSum)(next_c,N*H,"next_c sum =");
-         MKLNN_(LSTMFullStep_PrintSum)(grad_next_h,N*H,"grad_next_h sum =");
-         MKLNN_(LSTMFullStep_PrintSum)(ot,N*H,"ot sum =");
-         //MKLNN_(LSTMFullStep_PrintSum)(grad_next_c,N*H,"grad_next_c 1");
-      }
-*/
       //calc grad_next_c, grad_gate_o
       MKLNN_(LSTMFullStep_bprob_gateCO)(next_c,grad_next_c,ot,grad_ot,grad_next_h, N*H);
       MKLNN_(LSTMFullStep_bprob_gateIFG)(it,ft,gt,prev_c,grad_it,grad_ft,grad_gt,grad_next_c, N*H);
@@ -605,7 +596,7 @@ void MKLNN_(LSTMFullStep_updateGradInput)(
       MKLNN_(LSTMFullStep_bprob_transpose)(grad_a,grad_a2,N,H);
       MKLNN_(LSTMFullStep_bprob_linear)(xt,prev_h,Wx,Wh,grad_a2,grad_x,grad_Wx,grad_Wh,grad_next_h,scale,T,N,D,H);
       MKLNN_(LSTMFullStep_bprob_grad_next_c)(grad_next_c,ft,N*H);
-      //if(t == T-2)
+      /*
       {
          printf("------------------------------------- t = %d\n",t);
          MKLNN_(LSTMFullStep_PrintSum)(grad_ot,N*H,"grad_ot");
@@ -620,7 +611,7 @@ void MKLNN_(LSTMFullStep_updateGradInput)(
          MKLNN_(LSTMFullStep_PrintSum)(grad_next_h,N*H,"grad_next_h");
          MKLNN_(LSTMFullStep_PrintSum)(grad_next_c,N*H,"grad_next_c");
 
-      }
+      }*/
 
 
    }
