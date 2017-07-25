@@ -189,11 +189,12 @@ function LSTM:updateOutput(input)
       h0:cdata(),
       self.gates_mkl:cdata())
 
+--[[
   self.gates[{{1,T}, {1,N}, {1, H}}]           = self.gates_mkl[{{1,T},{1,N},           {1,H}}]
   self.gates[{{1,T}, {1,N}, {H + 1, 2 * H}}]   = self.gates_mkl[{{1,T},{N + 1, 2 * N},  {1,H}}]
   self.gates[{{1,T}, {1,N}, {2*H + 1, 3 * H}}] = self.gates_mkl[{{1,T},{2*N + 1, 3 * N},{1,H}}]
   self.gates[{{1,T}, {1,N}, {3*H + 1, 4 * H}}] = self.gates_mkl[{{1,T},{3*N + 1, 4 * N},{1,H}}]
-
+]]--
 
 --[[
 
