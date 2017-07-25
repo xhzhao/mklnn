@@ -206,8 +206,27 @@ void MKLNN_RealLSTMFullStep_updateOutput(
   THRealTensor * h,
   THRealTensor * c0, 
   THRealTensor * h0, 
-  THRealTensor * gates); 
+  THRealTensor * gates);
 
+void MKLNN_RealLSTMFullStep_updateGradInput(
+  THRealTensor * x,
+  THRealTensor * WX,
+  THRealTensor * WH,
+  THRealTensor * gradOutput,
+  THRealTensor * h,
+  THRealTensor * c,
+  THRealTensor * h0,
+  THRealTensor * c0,
+  THRealTensor * gates,
+  THRealTensor * grad_x,
+  THRealTensor * grad_b,
+  THRealTensor * grad_c0,
+  THRealTensor * grad_h0,
+  THRealTensor * grad_Wx,
+  THRealTensor * grad_Wh,
+  THRealTensor * grad_Buffer1,
+  THRealTensor * grad_Buffer2
+);
 
 ]]
 
