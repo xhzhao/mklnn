@@ -371,6 +371,13 @@ static void MKLNN_(SpatialConvolution_init_bwdfilter)(
     //init backward filter conversions:
     CHECK_ERR( MKLNN_(init_conversion)(&cv_bwdfilter_input, &buffer_bwdfilter_input, lt_bwdfilter_conv_input, lt_user_input), err );
     CHECK_ERR( MKLNN_(init_conversion)(&cv_bwdfilter_output, &buffer_bwdfilter_output, lt_bwdfilter_conv_output, lt_user_output), err );
+
+    if(!dnnLayoutCompare_F32(lt_bwdfilter_conv_filter, lt_user_filter))
+    {
+      CHECK_ERR( dnnConversionCreate_F32(&cv_bwdfilter_filter, lt_bwdfilter_conv_filter, lt_user_filter), err );
+      CHECK_ERR( dnnAllocateBuffer_F32((void**)(&buffer_bwdfilter_filter), lt_bwdfilter_conv_filter), err );			
+    }
+
   }
   else if(sizeof(real) == sizeof(double)) {
     CHECK_ERR(dnnConvolutionCreateBackwardFilter_F64(&m_conv_bwd_filter,attributes, dnnAlgorithmConvolutionDirect, dimension, inputSize, outputSize, filterSize,stride,pad,dnnBorderZeros),err);
@@ -478,12 +485,12 @@ void MKLNN_(SpatialConvolution_forward)(
       //	input->mkldnnLayout = primitives->storage->data[CONV_LAYOUT_INPUT];
     }
 
-    if(cv_forward_filter && initOk == 0) {
+    if(cv_forward_filter) {
       resConv[dnnResourceFilter] = buffer_forward_filter;
       convert_resources[dnnResourceFrom] = filterPtr;
       convert_resources[dnnResourceTo]   = buffer_forward_filter;
       CHECK_ERR( dnnExecute_F32(cv_forward_filter, convert_resources), err );
-      memcpy(filterPtr, buffer_forward_filter, THTensor_(nElement)(weight)*4);
+      //memcpy(filterPtr, buffer_forward_filter, THTensor_(nElement)(weight)*4);
       //weight->storage->data = buffer_forward_filter;
       //weight->storageOffset = 0;
 #if CONVERSION_LOG
