@@ -40,34 +40,49 @@ BN.__version = 2
 -- expected dimension of input
 BN.nDim = 2
 
-function BN:__init(nOutput, eps, momentum, affine)
+function BN:__init(nOutput, eps, momentum, affine, running_mean, running_var, weight, bias)
    parent.__init(self)
-   assert(nOutput and type(nOutput) == 'number',
-          'Missing argument #1: dimensionality of input. ')
-   assert(nOutput ~= 0, 'To set affine=false call BatchNormalization'
-     .. '(nOutput,  eps, momentum, false) ')
    if affine ~= nil then
       assert(type(affine) == 'boolean', 'affine has to be true/false')
       self.affine = affine
    else
       self.affine = true
    end
+
+   if (nOutput) then
+      assert(nOutput and type(nOutput) == 'number',
+             'Missing argument #1: dimensionality of input. ')
+      assert(nOutput ~= 0, 'To set affine=false call BatchNormalization'
+        .. '(nOutput,  eps, momentum, false) ')
+
+      self.running_mean = torch.zeros(nOutput)
+      self.running_var = torch.ones(nOutput)
+
+      if self.affine then
+         self.weight = torch.Tensor(nOutput)
+         self.bias = torch.Tensor(nOutput)
+         self.gradWeight = torch.Tensor(nOutput)
+         self.gradBias = torch.Tensor(nOutput)
+         self:reset()
+      end
+   else
+      assert(running_mean and running_var and weight and bias, "For convertion, all parameters should be passed in")
+      self.running_mean = running_mean 
+      self.running_var = running_var
+
+      if self.affine then
+         self.weight = weight
+         self.bias = bias
+         self.gradWeight = torch.Tensor(running_mean:size())
+         self.gradBias = torch.Tensor(running_mean:size())
+      end
+  
+   end
+
    self.eps = eps or 1e-5
    self.train = true
    self.momentum = momentum or 0.1
-   self.running_mean = torch.zeros(nOutput)
-   self.running_var = torch.ones(nOutput)
 
-   --self:setEngine(1)
-
-
-   if self.affine then
-      self.weight = torch.Tensor(nOutput)
-      self.bias = torch.Tensor(nOutput)
-      self.gradWeight = torch.Tensor(nOutput)
-      self.gradBias = torch.Tensor(nOutput)
-      self:reset()
-   end
 end
 
 function BN:reset()

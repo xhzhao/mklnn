@@ -44,6 +44,9 @@ require('mklnn.U2I')
 require('mklnn.Concat')
 require('mklnn.Concat2')
 require('mklnn.Dropout')
+require('mklnn.ConcatTable')
+require('mklnn.CAddTable')
+require('mklnn.Identity')
 
 mklnn.convert = require('mklnn.Convert')
 return mklnn
