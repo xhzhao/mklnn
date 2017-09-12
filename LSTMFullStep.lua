@@ -417,7 +417,6 @@ end
 
 
 function LSTM:updateGradInput(input, gradOutput)
-  print("mklnn.LSTM updateGradInput")
   if self.recompute_backward then
     self:backward(input, gradOutput, 1.0)
   end
@@ -426,7 +425,6 @@ end
 
 
 function LSTM:accGradParameters(input, gradOutput, scale)
-  print("mklnn.LSTM accGradParameters")
   if self.recompute_backward then
     self:backward(input, gradOutput, scale)
   end

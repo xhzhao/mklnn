@@ -3,10 +3,9 @@
 #else
 
 #include <math.h>
-#define TNUM 1
 #define LOG 0
 #define BATCH_GEMM 1
-#define PROFILE 0
+#define PROFILE 1
 #define getTime(start,end) ((double)(end.tv_sec-start.tv_sec)*1000 + (double)(end.tv_usec-start.tv_usec)/1000)
 
 static MKLNN_(LSTMFullStep_PrintSum)(
@@ -246,6 +245,7 @@ void MKLNN_(LSTMFullStep_updateOutput)(
 #endif
 
    int t = 0;
+   int j = 0;
    real * prev_c = THTensor_(data)(c0);
    real * prev_h = THTensor_(data)(h0);
    for(t =0; t < T; t++)
@@ -266,23 +266,17 @@ void MKLNN_(LSTMFullStep_updateOutput)(
 #endif
       //3. Sigmoid on it,ft,ot, Tanh on gt, size = N * H * 3
 
-      #pragma omp parallel num_threads(TNUM)
+      #pragma omp parallel for simd
+      for(j = 0; j < N*H; j++)
       {
-         int tid = omp_get_thread_num();
-         int j = 0;
-         int block_num = (N*H)/TNUM;
-         #pragma ivdep
-         for(j = tid * block_num; j < (tid +1)*block_num; j++)
-         {
-            it[j] = 1 /(1 + exp(-it[j]));
-            ft[j] = 1 /(1 + exp(-ft[j]));
-            ot[j] = 1 /(1 + exp(-ot[j]));
-            gt[j] = tanh( gt[j] );
+          it[j] = 1 /(1 + exp(-it[j]));
+          ft[j] = 1 /(1 + exp(-ft[j]));
+          ot[j] = 1 /(1 + exp(-ot[j]));
+          gt[j] = tanh( gt[j] );
 
          //4. ct, ht update
-            next_c[j] = ft[j] * prev_c[j] + it[j] * gt[j];
-            next_h[j] = ot[j] * tanh(next_c[j]);
-         }
+          next_c[j] = ft[j] * prev_c[j] + it[j] * gt[j];
+          next_h[j] = ot[j] * tanh(next_c[j]);
       }
 
       it = it +  N * 4 * H;
@@ -295,7 +289,14 @@ void MKLNN_(LSTMFullStep_updateOutput)(
   
 #if PROFILE
    gettimeofday(&end,NULL);
-   printf("LSTM C profile, total = %.4f, init = %.4f, batchGEMM = %.4f, GEMM2 = %.4f, else = %.4f\n",getTime(start,end), getTime(start,mid1), getTime(mid1,mid2), gemm2_time, getTime(mid2,end)-gemm2_time);
+   double Nf = N;
+   double Tf = T;
+   double Df = D;
+   printf("T = %d, N = %d, D = %d, H = %d \n", T, N, D, H);
+   double Hf = H;
+   double gflops = Tf*(Nf*Hf*Df*2 + Nf*Hf*Hf*2)/1e9*4; 
+   double GFLOPS = gflops*1e3/getTime(start,end);
+   printf("LSTM C profile, total = %.4f, init = %.4f, batchGEMM = %.4f, GEMM2 = %.4f, else = %.4f, gflops=%.0f, GFLOPS=%.4f\n",getTime(start,end), getTime(start,mid1), getTime(mid1,mid2), gemm2_time, getTime(mid2,end)-gemm2_time, gflops, GFLOPS);
 #endif
    
 }
