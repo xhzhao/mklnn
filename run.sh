@@ -2,7 +2,8 @@
 #th tc.lua
 
 t=$1
-
+lscpu
+. /home/zhaoxiao/test/inteltorch/install/bin/torch-activate
 export KMP_AFFINITY=compact,1,0,granularity=fine
 
 if [ $t == 'bdw' ]; then

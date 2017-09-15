@@ -292,11 +292,11 @@ void MKLNN_(LSTMFullStep_updateOutput)(
    double Nf = N;
    double Tf = T;
    double Df = D;
-   printf("T = %d, N = %d, D = %d, H = %d \n", T, N, D, H);
+   printf("N = %d, T = %d, D = %d, H = %d \n", N, T, D, H);
    double Hf = H;
    double gflops = Tf*(Nf*Hf*Df*2 + Nf*Hf*Hf*2)/1e9*4; 
    double GFLOPS = gflops*1e3/getTime(start,end);
-   printf("LSTM C profile, total = %.4f, init = %.4f, batchGEMM = %.4f, GEMM2 = %.4f, else = %.4f, gflops=%.0f, GFLOPS=%.4f\n",getTime(start,end), getTime(start,mid1), getTime(mid1,mid2), gemm2_time, getTime(mid2,end)-gemm2_time, gflops, GFLOPS);
+   printf("LSTM C profile, total = %.4f, init = %.4f, batchGEMM = %.4f, GEMM2 = %.4f, else = %.4f, gflops=%.4f, GFLOPS=%.4f\n",getTime(start,end), getTime(start,mid1), getTime(mid1,mid2), gemm2_time, getTime(mid2,end)-gemm2_time, gflops, GFLOPS);
 #endif
    
 }
