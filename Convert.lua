@@ -400,6 +400,14 @@ function nn2mklnnlayerCvt(layer_type, src_layer, prevOPFlag, dst_module, cvtOP)
     local stochastic_inference = src_layer.stochasticInference
     local v1 = not src_layer.v2
     local dst_layer = cvtOP[layer_type](p, v1, ip, stochastic_inference)
+    if prevOPFlag then
+      local convert_layer = mklnn.I2U()
+      prevOPFlag = false
+      if dst_module then
+        dst_module:add(convert_layer)
+      else
+        dst_module = convert_layer
+      end
     if dst_module then
       dst_module:add(dst_layer)
     else
