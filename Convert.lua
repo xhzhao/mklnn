@@ -387,6 +387,14 @@ function nn2mklnnlayerCvt(layer_type, src_layer, prevOPFlag, dst_module, cvtOP)
 
   elseif(string.find(layer_type, 'nn.CAddTable')) then
     local dst_layer = cvtOP[layer_type](src_layer.inplace)
+    if not prevOPFlag then
+      local convert_layer = mklnn.U2I()
+      if dst_module then
+        dst_module:add(convert_layer)
+      else
+        dst_module = convert_layer
+      end
+    end
     if dst_module then
       dst_module:add(dst_layer)
     else 
@@ -400,6 +408,14 @@ function nn2mklnnlayerCvt(layer_type, src_layer, prevOPFlag, dst_module, cvtOP)
     local stochastic_inference = src_layer.stochasticInference
     local v1 = not src_layer.v2
     local dst_layer = cvtOP[layer_type](p, v1, ip, stochastic_inference)
+    if not prevOPFlag then
+      local convert_layer = mklnn.U2I()
+      if dst_module then
+        dst_module:add(convert_layer)
+      else
+        dst_module = convert_layer
+      end
+    end
     if dst_module then
       dst_module:add(dst_layer)
     else
@@ -408,6 +424,14 @@ function nn2mklnnlayerCvt(layer_type, src_layer, prevOPFlag, dst_module, cvtOP)
 
   elseif(string.find(layer_type, 'nn.Identity')) then
     local dst_layer = cvtOP[layer_type]()
+    if not prevOPFlag then
+      local convert_layer = mklnn.U2I()
+      if dst_module then
+        dst_module:add(convert_layer)
+      else
+        dst_module = convert_layer
+      end
+    end
     if dst_module then
       dst_module:add(dst_layer)
     else
