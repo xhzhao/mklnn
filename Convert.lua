@@ -408,6 +408,8 @@ function nn2mklnnlayerCvt(layer_type, src_layer, prevOPFlag, dst_module, cvtOP)
       else
         dst_module = convert_layer
       end
+    end
+
     if dst_module then
       dst_module:add(dst_layer)
     else
