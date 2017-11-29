@@ -50,6 +50,7 @@ static void MKLNN_(Concat_init_forward)(
   free(layouts);
   dnnWorkspace* outputWorkspace = WORKSPACE_(New)(lt_concat_forward_output);
   TH_MKL_(changeWorkspace)(output, outputWorkspace);
+
   primitives->tensor->storage->data[CONCAT_PRIM_FWD] = (long)m_concat_forward;
 
 #if LOG_ENABLE
@@ -84,7 +85,7 @@ static void MKLNN_(Concat_init_backward)(
     size_t gradOutputSize[DIMENSION]    = {gradOutputW, gradOutputH, gradOutputC, N};
     size_t gradOutputStrides[DIMENSION] = {1, gradOutputW, gradOutputH *gradOutputW, gradOutputC*gradOutputH*gradOutputW};
     CHECK_ERR( MKLDNN_(dnnLayoutCreate)(&lt_user_gradOutput, DIMENSION, gradOutputSize, gradOutputStrides) , err );
-    gradOutput_layout_create_local = 0;
+    gradOutput_layout_create_local = 1;
   } else {
     lt_user_gradOutput = gradOutput->workspace->layout;
   }
@@ -106,7 +107,9 @@ static void MKLNN_(Concat_init_backward)(
     gradInput = gradInputArray[i];
     TH_MKL_(changeWorkspace)(gradInput, gradInputWorkspace);
   }
-  CHECK_ERR( MKLDNN_(dnnLayoutDelete)(lt_user_gradOutput) , err );
+  if(gradOutput_layout_create_local) {
+    CHECK_ERR( MKLDNN_(dnnLayoutDelete)(lt_user_gradOutput) , err );
+  }
   free(split_channels);
 
   primitives->tensor->storage->data[CONCAT_PRIM_BWD] = (long)concat_split;

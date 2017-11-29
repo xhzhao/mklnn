@@ -56,19 +56,19 @@ end
 function Concat:updateGradInput(input, gradOutput)
    self.gradInput = self.gradInput:mkl()
    self.gradInput:resizeAs(input)
-   local gradOutput = {}
-   local gradOutput_ptr = {}
+   local gradOutputs = {}
+   local gradOutputs_ptr = {}
    for i,module in ipairs(self.modules) do
       local gradOutputPart = torch.FloatTensor():mkl()
       gradOutputPart:resizeAs(module.output)
-      gradOutput[i] = gradOutputPart
-      gradOutput_ptr[i] = gradOutputPart:cdata()
+      gradOutputs[i] = gradOutputPart
+      gradOutputs_ptr[i] = gradOutputPart:cdata()
    end
 
-   string_type = torch.type(gradOutput[1])
+   string_type = torch.type(gradOutputs[1])
    cdefs = string_type:gsub('torch.', 'struct TH')
-   type_gradOuts_ptr = cdefs .. "*[" .. #gradOutput_ptr .."]"
-   ffi_gradOuts = ffi.new(type_gradOuts_ptr, gradOutput_ptr)
+   type_gradOuts_ptr = cdefs .. "*[" .. #gradOutputs_ptr .."]"
+   ffi_gradOuts = ffi.new(type_gradOuts_ptr, gradOutputs_ptr)
 
    wrapper(getType(gradOutput),
           'Concat_backward_split',
@@ -78,9 +78,10 @@ function Concat:updateGradInput(input, gradOutput)
           gradOutput:cdata(),
           tonumber(#self.modules)
           )
+
    for i,module in ipairs(self.modules) do
       local currentOutput = module.output
-      gradOutputPart = gradOutputBuffer[i]
+      gradOutputPart = gradOutputs[i]
       local currentGradInput = self:rethrowErrors(module, i, 'updateGradInput', input, gradOutputPart)
       if currentGradInput then -- if the module does not produce a gradInput (for example first layer), then ignore it and move on.
          if i==1 then

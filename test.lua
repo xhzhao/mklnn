@@ -75,8 +75,8 @@ function mklnntest.SpatialConvolution_g1()
    local dnnGradBias = dnnModule.gradBias
    local oriGBSum = oriGradBias:sum()
    local dnnGBSum = dnnGradBias:sum()
-   print("")
-   print("mklnn.SpatialConvolution g1 gradBias sum", oriGBSum, dnnGBSum)
+--   print("")
+--   print("mklnn.SpatialConvolution g1 gradBias sum", oriGBSum, dnnGBSum)
    mytester:assertTensorEq(oriGradBias, dnnGradBias, 0.1, 'mklnn.SpatialConvolution g1 gradBias')
 
 end
@@ -173,10 +173,10 @@ function mklnntest.SpatialConvolutionMKLDNN_g2()
    mytester:assertTensorEq(oriOutput, dnnOutput, 0.00001, 'mklnn.SpatialConvolution g2 output')
    local oriGISum = oriGradInput:sum()
    local dnnGISum = dnnGradInput:sum()
-   print("")
-   print("mklnn.SpatialConvolution g2 gradInput sum", oriGISum, dnnGISum)
+--   print("")
+--   print("mklnn.SpatialConvolution g2 gradInput sum", oriGISum, dnnGISum)
    mytester:assertTensorEq(oriGradInput, dnnGradInput, 0.00001, 'mklnn.SpatialConvolution g2 gradInput')
-   mytester:assertTensorEq(oriOutputRepeat, dnnOutputRepeat, 0.00001, 'mklnn.SpatialConvolution g2 output repeat')
+   mytester:assertTensorEq(oriOutputRepeat, dnnOutputRepeat, 0.00005, 'mklnn.SpatialConvolution g2 output repeat')
    
 end
 
