@@ -1,5 +1,5 @@
 local Concat, parent = torch.class('mklnn.Concat', 'nn.Container')
-
+local ffi = require 'ffi'
 local wrapper = mklnn.wrapper
 local getType = mklnn.getType
 
@@ -7,51 +7,47 @@ function Concat:__init(dimension)
    parent.__init(self)
    self.outputSize = torch.LongStorage()
    self.dimension = dimension
-
+   self.mkldnnInitOK =  false
+   self.firstIteration = true
 end
 
 function Concat:updateOutput(input)
    self.outputSize = self.outputSize or torch.LongStorage()
-   if self.dnnPrimitives then
-      self.mkldnnInitOk = 1 
+   if self.firstIteration then
+      self.dnnPrimitives = self.dnnPrimitives and self.dnnPrimitives:zero() or torch.LongTensor(5):zero():mkl()
+      self.mkldnnInitOK = false
+      self.firstIteration = false 
    else
-      self.mkldnnInitOk = 0 
-   end 
+      self.mkldnnInitOK = true
+   end
 
-   self.dnnPrimitives = self.dnnPrimitives or torch.LongTensor(20)
-   self.outputArray = self.outputArray or torch.LongTensor(10)
-   self.gradOutputArray = self.gradOutputArray or torch.LongTensor(10)
-
-   local iterStartTime
-   local iterForward
-   local forwardTime = 0
+   local outs_ptr = {}
    local outs = {}
-   local outputTable = {}
    for i=1,#self.modules do
       local currentOutput = self:rethrowErrors(self.modules[i], i, 'updateOutput', input)
       outs[i] = currentOutput
-      outputTable = currentOutput:cdata()
-      wrapper(getType(currentOutput),
-             'Concat_setupLongTensor',
-              self.outputArray:cdata(),
-              currentOutput:cdata(),
-              i)
+      outs_ptr[i] = currentOutput:cdata()
+
       if i == 1 then
          self.outputSize:resize(currentOutput:dim()):copy(currentOutput:size())
       else
          self.outputSize[self.dimension] = self.outputSize[self.dimension] + currentOutput:size(self.dimension)
       end
-
    end
+   string_type = torch.type(outs[1])
+   cdefs = string_type:gsub('torch.', 'struct TH')
+   type_outs_ptr = cdefs .. "*[" .. #outs_ptr .."]"
+   ffi_outs = ffi.new(type_outs_ptr, outs_ptr)
+
    self.output = self.output:mkl()
    self.output:resize(self.outputSize)
    wrapper(getType(self.output),
           'Concat_updateOutput',
-          self.outputArray:cdata(),
-          self.output:cdata(),
-          tonumber(#self.modules),
           self.dnnPrimitives:cdata(),
-          self.mkldnnInitOk
+          self.mkldnnInitOK,
+          ffi_outs, 
+          self.output:cdata(),
+          tonumber(#self.modules)
           )
 
    return self.output
@@ -60,26 +56,28 @@ end
 function Concat:updateGradInput(input, gradOutput)
    self.gradInput = self.gradInput:mkl()
    self.gradInput:resizeAs(input)
-   local gradOutputBuffer = {}
+   local gradOutput = {}
+   local gradOutput_ptr = {}
    for i,module in ipairs(self.modules) do
       local gradOutputPart = torch.FloatTensor():mkl()
       gradOutputPart:resizeAs(module.output)
-      gradOutputBuffer[i] = gradOutputPart
-      wrapper(getType(gradOutputPart),
-             'Concat_setupLongTensor',
-              self.gradOutputArray:cdata(),
-              gradOutputPart:cdata(),
-              i)
+      gradOutput[i] = gradOutputPart
+      gradOutput_ptr[i] = gradOutputPart:cdata()
    end
+
+   string_type = torch.type(gradOutput[1])
+   cdefs = string_type:gsub('torch.', 'struct TH')
+   type_gradOuts_ptr = cdefs .. "*[" .. #gradOutput_ptr .."]"
+   ffi_gradOuts = ffi.new(type_gradOuts_ptr, gradOutput_ptr)
+
    wrapper(getType(gradOutput),
           'Concat_backward_split',
-          self.gradOutputArray:cdata(),
-          gradOutput:cdata(),
-          tonumber(#self.modules),
           self.dnnPrimitives:cdata(),
-          self.mkldnnInitOk
+          self.mkldnnInitOK,
+          ffi_gradOuts,
+          gradOutput:cdata(),
+          tonumber(#self.modules)
           )
-
    for i,module in ipairs(self.modules) do
       local currentOutput = module.output
       gradOutputPart = gradOutputBuffer[i]
@@ -102,7 +100,6 @@ function Concat:accGradParameters(input, gradOutput, scale)
       local currentOutput = module.output
       local gradOutputPart = torch.FloatTensor():mkl()
       gradOutputPart:resizeAs(module.output)
-      --local gradOutputPart = gradOutput:narrow(self.dimension, offset, currentOutput:size(self.dimension))
       self:rethrowErrors(module, i, 'accGradParameters',
           input,
           gradOutputPart,
@@ -114,29 +111,33 @@ end
 function Concat:backward(input, gradOutput, scale)
    self.gradInput = self.gradInput:mkl()
    self.gradInput:resizeAs(input)
-   local gradOutputBuffer = {}
+   local gradOutputs = {}
+   local gradOutputs_ptr = {}
    for i,module in ipairs(self.modules) do
       local gradOutputPart = torch.FloatTensor():mkl()
       gradOutputPart:resizeAs(module.output)
-      gradOutputBuffer[i] = gradOutputPart
-      wrapper(getType(gradOutputPart),
-             'Concat_setupLongTensor',
-              self.gradOutputArray:cdata(),
-              gradOutputPart:cdata(),
-              i)
+      gradOutputs[i] = gradOutputPart
+      gradOutputs_ptr[i] = gradOutputPart:cdata()
    end
+
+   string_type = torch.type(gradOutputs[1])
+   cdefs = string_type:gsub('torch.', 'struct TH')
+   type_gradOuts_ptr = cdefs .. "*[" .. #gradOutputs_ptr .."]"
+   ffi_gradOuts = ffi.new(type_gradOuts_ptr, gradOutputs_ptr)
+
    wrapper(getType(gradOutput),
           'Concat_backward_split',
-          self.gradOutputArray:cdata(),
-          gradOutput:cdata(),
-          tonumber(#self.modules),
           self.dnnPrimitives:cdata(),
-          self.mkldnnInitOk
+          self.mkldnnInitOK,
+          ffi_gradOuts,
+          gradOutput:cdata(),
+          tonumber(#self.modules)
           )
+
    for i,module in ipairs(self.modules) do
       local currentOutput = module.output
-      gradOutputPart = gradOutputBuffer[i]
-      local currentGradInput = self:rethrowErrors(module, i, 'backward', input, gradOutputPart, scale)
+      gradOutputPart = gradOutputs[i]
+      local currentGradInput = self:rethrowErrors(module, i, 'updateGradInput', input, gradOutputPart)
       if currentGradInput then -- if the module does not produce a gradInput (for example first layer), then ignore it and move on.
          if i==1 then
             self.gradInput:copy(currentGradInput)
@@ -144,7 +145,6 @@ function Concat:backward(input, gradOutput, scale)
             self.gradInput:add(currentGradInput)
          end
       end
-
    end
    return self.gradInput
 end
@@ -180,4 +180,12 @@ function Concat:__tostring__()
    str = str .. line .. tab .. last .. 'output'
    str = str .. line .. '}'
    return str
+end
+
+function Concat:clearState()
+   print('===============Concat')
+   self.dnnPrimitives = nil
+   self.mkldnnInitOK =  false
+   self.firstIteration = true
+   return parent.clearState(self)
 end

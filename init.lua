@@ -13,7 +13,6 @@ local wrapper = function(dataType,f,...)
 end
 mklnn.wrapper = wrapper
 
-
 local typeMap = {
 
    ['torch.FloatTensor']   = 'Float',
@@ -29,6 +28,7 @@ local getType = function(tensor)
    return typeMap[tensorType]
 end
 mklnn.getType = getType
+
 
 require('mklnn.SpatialConvolution')
 require('mklnn.test')

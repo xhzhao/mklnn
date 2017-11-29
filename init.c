@@ -9,34 +9,37 @@
 #include "luaT.h"
 #include "THStorage.h"
 #include "THTensor.h"
-#include "MKLTensor.h"
-#include "src/mkl_cat.h"
-#include "src/MKLDNN.h"
-#include "src/Random.h"
 
-#define THTensor            TH_CONCAT_3(TH,Real,Tensor)          
+#include "src/mkl_cat.h"
+#include "src/Random.h"
+#include "src/MKLDNN.h"
+#include "MKLTensor.h"
+
+#include "src/Random.c"
+
+
+
 #define torch_mkl_(NAME)    TH_CONCAT_4(torch_MKL, Real, Tensor_, NAME)             
 #define TH_MKL_(NAME)       TH_CONCAT_4(THMKL, Real, Tensor, NAME)                                      
 #define torch_mkl_tensor    TH_CONCAT_STRING_4(torch., MKL, Real, Tensor)
 
 #define THMKLTensor         TH_CONCAT_3(THMKL, Real, Tensor)
-#define MKLNN_(NAME)        TH_CONCAT_3(MKLNN_,Real, NAME)   
+#define MKLNN_(NAME)        TH_CONCAT_3(MKLNN_, Real, NAME)   
+#define MKLDNN_(NAME)       TH_CONCAT_3(NAME, _, BIT)   
 
 
+#include "generateFloatTypes.h"
 #include "src/SpatialConvolution.c"
-#include "generateAllTypes.h"
-#include "src/ThresholdMKLDNN.c"
-#include "generateAllTypes.h"
+#include "generateFloatTypes.h"
+#include "src/Threshold.c"
+#include "generateFloatTypes.h"
 #include "src/SpatialMaxPooling.c"
-#include "generateAllTypes.h"
+#include "generateFloatTypes.h"
 #include "src/SpatialAveragePooling.c"
-#include "generateAllTypes.h"
+#include "generateFloatTypes.h"
 #include "src/BatchNormalization.c"
-#include "generateAllTypes.h"
+#include "generateFloatTypes.h"
 #include "src/SpatialCrossMapLRN.c"
-#include "generateAllTypes.h"
+#include "generateFloatTypes.h"
 #include "src/Concat.c"
-#include "generateAllTypes.h"
-#include "src/Random.c"
-#include "generateAllTypes.h"
-
+#include "generateFloatTypes.h"

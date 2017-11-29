@@ -11,7 +11,6 @@ function CAddTable:updateOutput(input)
    if self.inplace then
       self.output:set(input[1])
    else
-
       self.output:resizeAs(input[1]):copy(input[1])
    end
    for i=2,#input do

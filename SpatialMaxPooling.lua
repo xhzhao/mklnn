@@ -15,6 +15,8 @@ function SpatialMaxPooling:__init(kW, kH, dW, dH, padW, padH)
    self.padW = padW or 0
    self.padH = padH or 0
    self.ceil_mode = false
+   self.mkldnnInitOK =  false
+   self.firstIteration = true
 end
 
 function SpatialMaxPooling:ceil()
@@ -29,12 +31,13 @@ end
 
 function SpatialMaxPooling:updateOutput(input)
 
-   if self.dnnPrimitives then
-      self.mkldnnInitOk = 1
+   if self.firstIteration then
+      self.dnnPrimitives = self.dnnPrimitives and self.dnnPrimitives:zero() or torch.LongTensor(14):zero():mkl()
+      self.mkldnnInitOK = false
+      self.firstIteration = false 
    else
-      self.mkldnnInitOk = 0
+      self.mkldnnInitOK = true
    end
-   self.dnnPrimitives = self.dnnPrimitives or torch.LongTensor(16)
 
    self.output = self.output:mkl() --add
    self.gradInput = self.gradInput:mkl()
@@ -44,30 +47,26 @@ function SpatialMaxPooling:updateOutput(input)
    self.padW = self.padW or 0
    self.padH = self.padH or 0
 
-   --print("SpatialMaxPooling output nElement = ",self.output:nElement())
     wrapper(getType(input),'SpatialMaxPooling_updateOutput',
+       self.dnnPrimitives:cdata(),
+       self.mkldnnInitOK,
        input:cdata(),
        self.output:cdata(),
        self.kW, self.kH,
        self.dW, self.dH,
        self.padW, self.padH,
-       self.ceil_mode,
-       self.dnnPrimitives:cdata(),
-       self.mkldnnInitOk)
+       self.ceil_mode)
+
    return self.output
 end
 
 function SpatialMaxPooling:updateGradInput(input, gradOutput)
-
    wrapper(getType(input),'SpatialMaxPooling_updateGradInput',
+      self.dnnPrimitives:cdata(), self.mkldnnInitOK,
       input:cdata(),
       gradOutput:cdata(),
-      self.gradInput:cdata(),
-      self.kW, self.kH,
-      self.dW, self.dH,
-      self.padW, self.padH,
-      self.ceil_mode,
-      self.dnnPrimitives:cdata(),self.mkldnnInitOk)
+      self.gradInput:cdata())
+
    return self.gradInput
 end
 
@@ -88,5 +87,10 @@ function SpatialMaxPooling:__tostring__()
 end
 
 function SpatialMaxPooling:clearState()
-   return parent.clearState(self)
+
+   self.mkldnnInitOK =  false
+   self.firstIteration = true
+   self.dnnPrimitives = nil
+   print("================= max pool")
+   return nn.Module.clearState(self)
 end

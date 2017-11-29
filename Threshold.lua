@@ -15,41 +15,40 @@ function Threshold:__init(th,v,ip)
       error('in-place flag must be boolean')
    end
 
+   self.mkldnnInitOK =  false
+   self.firstIteration = true
    self:validateParameters()
 end
 
 function Threshold:updateOutput(input)
-   if self.dnnPrimitives then
-      self.mkldnnInitOk = 1
+   if self.firstIteration then
+      self.dnnPrimitives = self.dnnPrimitives and self.dnnPrimitives:zero() or torch.LongTensor(10):zero():mkl()
+      self.mkldnnInitOK = false
+      self.firstIteration = false 
    else
-      self.mkldnnInitOk = 0
+      self.mkldnnInitOK = true
    end
-   self.dnnPrimitives = self.dnnPrimitives or torch.LongTensor(11)
    self.gradInput = self.gradInput:mkl()
    self.output = self.output:mkl()
    self:validateParameters()
    wrapper(getType(input),'Threshold_updateOutput',
+           self.dnnPrimitives:cdata(),
+           self.mkldnnInitOK,
            input:cdata(),
            self.output:cdata(),
-           self.threshold,
-           self.val,
-           self.inplace,
-           self.dnnPrimitives:cdata(),
-           self.mkldnnInitOk
+           self.threshold
           ) 
    return self.output
 end
 
 function Threshold:updateGradInput(input, gradOutput)
    self:validateParameters()
-
    wrapper(getType(input),'Threshold_updateGradInput',
+              self.dnnPrimitives:cdata(),
+              self.mkldnnInitOK,
               input:cdata(),
               gradOutput:cdata(),
-              self.gradInput:cdata(),
-              self.threshold,
-              self.inplace,
-              self.dnnPrimitives:cdata(),self.mkldnnInitOk
+              self.gradInput:cdata()
           )
    return self.gradInput
 end
@@ -63,3 +62,13 @@ function Threshold:validateParameters()
       end
    end
 end
+
+function Threshold:clearState()
+   self.dnnPrimitives = nil
+   self.mkldnnInitOK =  false
+   self.firstIteration = true
+   print('===============Threshold')
+   return parent.clearState(self)
+end
+
+

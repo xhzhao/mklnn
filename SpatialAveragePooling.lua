@@ -14,7 +14,8 @@ function SpatialAveragePooling:__init(kW, kH, dW, dH, padW, padH)
    self.ceil_mode = false
    self.count_include_pad = true
    self.divide = true
-
+   self.mkldnnInitOK =  false
+   self.firstIteration = true
 end
 
 function SpatialAveragePooling:ceil()
@@ -47,26 +48,28 @@ local function backwardCompatible(self)
 end
 
 function SpatialAveragePooling:updateOutput(input)
-   if self.dnnPrimitives then
-      self.mkldnnInitOk = 1 
+   if self.firstIteration then
+      self.dnnPrimitives = self.dnnPrimitives and self.dnnPrimitives:zero() or torch.LongTensor(14):zero():mkl()
+      self.mkldnnInitOK = false
+      self.firstIteration = false
    else
-      self.mkldnnInitOk = 0 
-   end 
-   self.dnnPrimitives = self.dnnPrimitives or torch.LongTensor(16)
+      self.mkldnnInitOK = true
+   end
+
    self.output = self.output:mkl()
    self.gradInput = self.gradInput:mkl()
    backwardCompatible(self)
 
    wrapper(getType(input),'SpatialAveragePooling_updateOutput',
+      self.dnnPrimitives:cdata(),
+      self.mkldnnInitOK,
       input:cdata(),
       self.output:cdata(),
       self.kW, self.kH,
       self.dW, self.dH,
       self.padW, self.padH,
       self.ceil_mode,
-      self.count_include_pad,
-      self.dnnPrimitives:cdata(),
-      self.mkldnnInitOk
+      self.count_include_pad
    )
 
    -- for backward compatibility with saved models
@@ -80,16 +83,11 @@ end
 function SpatialAveragePooling:updateGradInput(input, gradOutput)
    if self.gradInput then
       wrapper(getType(input),'SpatialAveragePooling_updateGradInput',
-	 input:cdata(),
-	 gradOutput:cdata(),
-	 self.gradInput:cdata(),
-	 self.kW, self.kH,
-	 self.dW, self.dH,
-	 self.padW, self.padH,
-	 self.ceil_mode,
-	 self.count_include_pad,
-	 self.dnnPrimitives:cdata(),
-         self.mkldnnInitOk
+	     self.dnnPrimitives:cdata(),
+         self.mkldnnInitOK,
+	     input:cdata(),
+	     gradOutput:cdata(),
+	     self.gradInput:cdata()
       )
       -- for backward compatibility
       if not self.divide then
@@ -108,4 +106,12 @@ function SpatialAveragePooling:__tostring__()
    end
    s = s .. ')'
    return s 
+end
+
+function SpatialAveragePooling:clearState()
+   print("================= avg pool")
+   self.mkldnnInitOK =  false
+   self.firstIteration = true
+   self.dnnPrimitives = nil
+   return parent.clearState(self)
 end

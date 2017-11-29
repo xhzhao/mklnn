@@ -5,111 +5,133 @@
 #define CONVERSION_LOG	 0
 #define MKL_TIME         0
 #define NEW_INTERFACE    1
-#define dimension        4
+#define DIMENSION        4
+#define MKL_BUFFER_DBG   1
+
+/*
+ * U2F:  [user] layout(which is passed in from other layers) to a layout which is to be used in [forward] operation
+ * U2BD: [user] layout(which is passed in from other layers) to a layout which is to be used in [backward data] operation
+ * U2BF: [user] layout(which is passed in from other layers) to a layout which is to be used in [backward filter] operation
+ * U2BB: [user] layout(which is passed in from other layers) to a layout which is to be used in [backward bias] operation
+ * F2BD: a layout which is to be used in [forward] operation to a layout which is to be used in [backward data] operation
+ * as so on
+ */
+
+#define MKL_INFO_TYPE     0
+#define MKL_INFO_PRMT     1
+#define MKL_INFO_BUFFER   2
+#define MKL_INFO_MAINTAIN 3
+
+#define MKL_CONV_PRMT     18
+#define MKL_CONV_BUFFER   12
+
+#define MKL_POOL_PRMT     6
+#define MKL_POOL_BUFFER   5
+
+#define MKL_LRN_PRMT      3
+#define MKL_LRN_BUFFER    2
+
+#define MKL_BN_PRMT       4
+#define MKL_BN_BUFFER     3
+
+#define MKL_RELU_PRMT     4
+#define MKL_RELU_BUFFER   3
+
+#define MKL_CONCAT_PRMT   2
+#define MKL_CONCAT_BUFFER 0
 
 typedef enum {
-   CONV_LAYOUT_INPUT                = 0,
-   CONV_LAYOUT_OUTPUT               = 1,
-   CONV_LAYOUT_FORWARD_OUTPUT       = 2,
-   CONV_LAYOUT_BWDDATA_INPUT        = 3,
-   CONV_LAYOUT_BWDFILT_OUTPUT       = 4,
-   CONV_LAYOUT_FILTER               = 5,
-   FORWARD_INDEX                    = 6,
-   BWD_DATA_INDEX                   = 7,
-   BWD_FILTER_INDEX                 = 8,
-   BWD_BIAS_INDEX                   = 9,
-   CONVERT_FORWARD_INPUT            = 10,
-   CONVERT_FORWARD_FILTER           = 11,
-   CONVERT_FORWARD_BIAS             = 12,
-   CONVERT_FORWARD_OUTPUT           = 13,
-   CONVERT_BWDDATA_INPUT            = 14,
-   CONVERT_BWDDATA_FILTER           = 15,
-   CONVERT_BWDDATA_OUTPUT           = 16,
-   CONVERT_BWDFILTER_INPUT          = 17,
-   CONVERT_BWDFILTER_FILTER         = 18,
-   CONVERT_BWDFILTER_OUTPUT         = 19,
-   BUFFER_FORWARD_INPUT             = 20,
-   BUFFER_FORWARD_FILTER            = 21,
-   BUFFER_FORWARD_BIAS              = 22,
-   BUFFER_FORWARD_OUTPUT            = 23,
-   BUFFER_BWDDATA_INPUT             = 24,
-   BUFFER_BWDDATA_FILTER            = 25,
-   BUFFER_BWDDATA_OUTPUT            = 26,
-   BUFFER_BWDFILTER_INPUT           = 27,
-   BUFFER_BWDFILTER_FILTER          = 28,
-   BUFFER_BWDFILTER_OUTPUT          = 29
+   CONV_PRIM_FWD                          = MKL_INFO_MAINTAIN+0,
+   CONV_PRIM_BWD_DATA                     = MKL_INFO_MAINTAIN+1,
+   CONV_PRIM_BWD_FILTER                   = MKL_INFO_MAINTAIN+2,
+   CONV_PRIM_BWD_BIAS                     = MKL_INFO_MAINTAIN+3,
+
+   CONV_PRIM_CVT_INPUT_U2F                = MKL_INFO_MAINTAIN+4,
+   CONV_PRIM_CVT_FILTER_U2F               = MKL_INFO_MAINTAIN+5,
+   CONV_PRIM_CVT_BIAS_U2F                 = MKL_INFO_MAINTAIN+6,
+   CONV_PRIM_CVT_OUTPUT_U2F               = MKL_INFO_MAINTAIN+7,
+
+   CONV_PRIM_CVT_GRADINPUT_U2BD           = MKL_INFO_MAINTAIN+8,
+   CONV_PRIM_CVT_FILTER_U2BD              = MKL_INFO_MAINTAIN+9,
+   CONV_PRIM_CVT_GRADOUTPUT_U2BD          = MKL_INFO_MAINTAIN+10,
+
+   CONV_PRIM_CVT_INPUT_U2BF               = MKL_INFO_MAINTAIN+11,
+   CONV_PRIM_CVT_GRADFILTER_U2BF          = MKL_INFO_MAINTAIN+12,
+   CONV_PRIM_CVT_GRADOUTPUT_U2BF          = MKL_INFO_MAINTAIN+13,
+   CONV_PRIM_CVT_GRADFILTER_BF2U          = MKL_INFO_MAINTAIN+14,
+
+   CONV_PRIM_CVT_GRADBIAS_U2BB            = MKL_INFO_MAINTAIN+15,
+   CONV_PRIM_CVT_GRADOUTPUT_U2BB          = MKL_INFO_MAINTAIN+16,
+   CONV_PRIM_CVT_GRADBIAS_BB2U            = MKL_INFO_MAINTAIN+17,
+
+   CONV_BUFFER_INPUT_FWD                  = MKL_INFO_MAINTAIN+18,
+   CONV_BUFFER_FILTER_FWD                 = MKL_INFO_MAINTAIN+19,
+   CONV_BUFFER_BIAS_FWD                   = MKL_INFO_MAINTAIN+20,
+   CONV_BUFFER_OUTPUT_FWD                 = MKL_INFO_MAINTAIN+21,
+
+   CONV_BUFFER_GRADINPUT_BWD_DATA         = MKL_INFO_MAINTAIN+22,
+   CONV_BUFFER_FILTER_BWD_DATA            = MKL_INFO_MAINTAIN+23,
+   CONV_BUFFER_GRADOUTPUT_BWD_DATA        = MKL_INFO_MAINTAIN+24,
+
+   CONV_BUFFER_INPUT_BWD_FILTER           = MKL_INFO_MAINTAIN+25,
+   CONV_BUFFER_GRADFILTER_BWD_FILTER      = MKL_INFO_MAINTAIN+26,
+   CONV_BUFFER_GRADOUTPUT_BWD_FILTER      = MKL_INFO_MAINTAIN+27,
+
+   CONV_BUFFER_GRADBIAS_BWD_BIAS          = MKL_INFO_MAINTAIN+28,
+   CONV_BUFFER_GRADOUTPUT_BWD_BIAS        = MKL_INFO_MAINTAIN+29
+
 } mkldnnConvolutionIndex_t;
 
 typedef enum {
-   POOLING_LAYOUT_INPUT             = 0,
-   POOLING_LAYOUT_OUTPUT            = 1,
-   POOLING_LAYOUT_FORWARD_OUTPUT    = 2,
-   POOLING_LAYOUT_BACKWARD_INPUT    = 3,
-   POOLING_FORWARD                  = 4,
-   POOLING_BACKWARD                 = 5,
-   CV_POOLING_FORWARD_INPUT         = 6,
-   CV_POOLING_FORWARD_OUTPUT        = 7,
-   CV_POOLING_BACKWARD_INPUT        = 8,
-   CV_POOLING_BACKWARD_OUTPUT       = 9,
-   BUFFER_POOLING_FORWARD_INPUT     = 10,
-   BUFFER_POOLING_FORWARD_OUTPUT    = 11,
-   BUFFER_POOLING_FORWARD_WORKSPACE = 12,
-   BUFFER_POOLING_BACKWARD_INPUT    = 13,
-   BUFFER_POOLING_BACKWARD_OUTPUT   = 14,
-   BUFFER_POOLING_BACKWARD_WORKSPACE= 15
+   POOL_PRIM_FWD                          = MKL_INFO_MAINTAIN+0,
+   POOL_PRIM_BWD                          = MKL_INFO_MAINTAIN+1,
+
+   POOL_PRIM_CVT_INPUT_FWD                = MKL_INFO_MAINTAIN+2,
+   POOL_PRIM_CVT_OUTPUT_FWD               = MKL_INFO_MAINTAIN+3,
+   POOL_PRIM_CVT_GRADINPUT_BWD            = MKL_INFO_MAINTAIN+4,
+   POOL_PRIM_CVT_GRADOUTPUT_BWD           = MKL_INFO_MAINTAIN+5,
+
+   POOL_BUFFER_WORKSPACE                  = MKL_INFO_MAINTAIN+6,
+   POOL_BUFFER_INPUT_FWD                  = MKL_INFO_MAINTAIN+7,
+   POOL_BUFFER_OUTPUT_FWD                 = MKL_INFO_MAINTAIN+8,
+   POOL_BUFFER_GRADINPUT_BWD              = MKL_INFO_MAINTAIN+9,
+   POOL_BUFFER_GRADOUTPUT_BWD             = MKL_INFO_MAINTAIN+10
 } mkldnnPoolingIndex_t;
 
 typedef enum {
-   RELU_LAYOUT_INPUT                = 0,
-   RELU_LAYOUT_OUTPUT               = 1,
-   RELU_LAYOUT_FORWARD_OUTPUT       = 2,
-   RELU_LAYOUT_BACKWARD_INPUT       = 3,
-   RELU_FORWARD                     = 4,
-   RELU_BACKWARD                    = 5,
-   CV_RELU_BACKWARD_OUTPUT	        = 6,
-   BUFFER_RELU_FORWARD_INPUT        = 7,
-   BUFFER_RELU_FORWARD_OUTPUT       = 8,
-   BUFFER_RELU_BACKWARD_INPUT       = 9,
-   BUFFER_RELU_BACKWARD_OUTPUT      = 10
+   RELU_PRIM_FWD                          = MKL_INFO_MAINTAIN+0,
+   RELU_PRIM_BWD                          = MKL_INFO_MAINTAIN+1,
+   RELU_PRIM_CVT_GRADOUTPUT_BWD           = MKL_INFO_MAINTAIN+2,
+   RELU_PRIM_CVT_GRADINPUT_BWD            = MKL_INFO_MAINTAIN+3,
+
+   RELU_BUFFER_OUTPUT_FWD                 = MKL_INFO_MAINTAIN+4,
+   RELU_BUFFER_GRADINPUT_BWD              = MKL_INFO_MAINTAIN+5,
+   RELU_BUFFER_GRADOUTPUT_BWD             = MKL_INFO_MAINTAIN+6
 } mkldnnReLUIndex_t;
 
 typedef enum {
-   BN_LAYOUT_INPUT                  = 0,
-   BN_LAYOUT_OUTPUT	                = 1,
-   BN_LAYOUT_FORWARD_OUTPUT         = 2,
-   BN_LAYOUT_BACKWARD_INPUT         = 3,
-   BN_FORWARD                       = 4,
-   BN_BACKWARD                      = 5,
-   BN_SCALESHIFT                    = 6,
-   BUFFER_BN_FORWARD_WORKSPACE      = 7,
-   BUFFER_BN_FORWARD_SCALESHIFT     = 8,
-   BUFFER_BN_FORWARD_OUTPUT         = 9,
-   BUFFER_BN_BACKWARD_WORKSPACE     = 10,
-   BUFFER_BN_BACKWARD_SCALESHIFT    = 11,
-   CV_BN_BACKWARD_OUTPUT            = 12,
-   BUFFER_BN_BACKWARD_OUTPUT        = 13,
-   BUFFER_BN_BACKWARD_INPUT         = 14
+   BN_PRIM_FWD                            = MKL_INFO_MAINTAIN+0,
+   BN_PRIM_BWD_DATA                       = MKL_INFO_MAINTAIN+1,
+   BN_PRIM_BWD_SCALESHIFT                 = MKL_INFO_MAINTAIN+2,
+   BN_PRIM_CVT_GRADOUTPUT_BWD             = MKL_INFO_MAINTAIN+3,
+
+   BN_BUFFER_WORKSPACE                    = MKL_INFO_MAINTAIN+4,
+   BN_BUFFER_SCALESHIFT                   = MKL_INFO_MAINTAIN+5,
+   BN_BUFFER_GRADOUTPUT_BWD               = MKL_INFO_MAINTAIN+6
 } mkldnnBNIndex_t;
 
 typedef enum {
-   LRN_LAYOUT_INPUT                 = 0,
-   LRN_LAYOUT_OUTPUT                = 1,
-   LRN_LAYOUT_FORWARD_OUTPUT        = 2,
-   LRN_LAYOUT_BACKWARD_INPUT        = 3,
-   LRN_FORWARD                      = 4,
-   LRN_BACKWARD                     = 5,
-   BUFFER_LRN_WORKSPACE             = 6,
-   CV_LRN_BACKWARD_OUTPUT           = 7,
-   BUFFER_LRN_BACKWARD_OUTPUT       = 8
+   LRN_PRIM_FWD                           = MKL_INFO_MAINTAIN+0,
+   LRN_PRIM_BWD                           = MKL_INFO_MAINTAIN+1,
+   LRN_PRIM_CVT_GRADOUTPUT_BWD            = MKL_INFO_MAINTAIN+2,
+
+   LRN_BUFFER_WORKSPACE                   = MKL_INFO_MAINTAIN+3,
+   LRN_BUFFER_GRADOUTPUT_BWD              = MKL_INFO_MAINTAIN+4
 } mkldnnLRNIndex_t;
 
 typedef enum {
-   CONCAT_LAYOUT_INPUT              = 0,
-   CONCAT_LAYOUT_OUTPUT             = 1,
-   CONCAT_LAYOUT_FORWARD_OUTPUT	    = 2,
-   CONCAT_LAYOUT_BACKWARD_INPUT	    = 3,
-   CONCAT_FORWARD                   = 4,
-   CONCAT_BACKWARD                  = 5
+   CONCAT_PRIM_FWD                        = MKL_INFO_MAINTAIN+0,
+   CONCAT_PRIM_BWD                        = MKL_INFO_MAINTAIN+1
 } mkldnnConcatIndex_t;
 
 #define CHECK_ERR(f, err) do { \

@@ -23,10 +23,10 @@ function SpatialConvolution:__init(nInputPlane, nOutputPlane, kW, kH, dW, dH, pa
    self.bias = torch.Tensor(nOutputPlane)
    self.gradWeight = torch.Tensor(nOutputPlane, nInputPlane*kH*kW/self.group)
    self.gradBias = torch.Tensor(nOutputPlane)
-
-
-
    self:reset()
+
+   self.mkldnnInitOK =  false
+   self.firstIteration = true
 end
 
 function SpatialConvolution:reset(stdv)
@@ -49,30 +49,17 @@ function SpatialConvolution:reset(stdv)
 end
 
 local function makeContiguous(self, input, gradOutput)
---[[
-   if not input:isContiguous() then
-      self._input = self._input or input.new()
-      self._input:resizeAs(input):copy(input)
-      input = self._input
-   end
-   if gradOutput then
-      if not gradOutput:isContiguous() then
-	 self._gradOutput = self._gradOutput or gradOutput.new()
-	 self._gradOutput:resizeAs(gradOutput):copy(gradOutput)
-	 gradOutput = self._gradOutput
-      end
-   end
-]]--
    return input, gradOutput
 end
 
 function SpatialConvolution:updateOutput(input)
-   if self.dnnPrimitives then
-      self.mkldnnInitOk = 1
-   else
-      self.mkldnnInitOk = 0
-   end
-   self.dnnPrimitives = self.dnnPrimitives or torch.LongTensor(30)
+   if self.firstIteration then
+      self.dnnPrimitives = self.dnnPrimitives and self.dnnPrimitives:zero() or torch.LongTensor(33):zero():mkl()
+      self.mkldnnInitOK = false
+      self.firstIteration = false
+   else 
+      self.mkldnnInitOK = true
+   end 
 
    self.output = self.output:mkl()
    self.gradInput = self.gradInput:mkl()
@@ -84,11 +71,12 @@ function SpatialConvolution:updateOutput(input)
    end
    input = makeContiguous(self, input)
    wrapper(getType(input),'SpatialConvolution_forward',
+      self.dnnPrimitives:cdata(),
+      self.mkldnnInitOK,
       input:cdata(),
       self.output:cdata(),
       self.weight:cdata(),
       self.bias:cdata(),
-      self.dnnPrimitives:cdata(),self.mkldnnInitOk,
       self.kW, self.kH,
       self.dW, self.dH,
       self.padW, self.padH,self.group
@@ -100,12 +88,13 @@ function SpatialConvolution:updateGradInput(input, gradOutput)
    if self.gradInput then
       input, gradOutput = makeContiguous(self, input, gradOutput)
       wrapper(getType(input),'SpatialConvolution_bwdData',
+         self.dnnPrimitives:cdata(),
+         self.mkldnnInitOK,
          input:cdata(),
          gradOutput:cdata(),
          self.gradInput:cdata(),
          self.weight:cdata(),
          self.bias:cdata(),
-         self.dnnPrimitives:cdata(),self.mkldnnInitOk,
          self.kW, self.kH,
          self.dW, self.dH,
          self.padW, self.padH,self.group
@@ -118,15 +107,16 @@ function SpatialConvolution:accGradParameters(input, gradOutput, scale)
    scale = scale or 1
    input, gradOutput = makeContiguous(self, input, gradOutput)
    wrapper(getType(input),'SpatialConvolution_bwdFilter',
+      self.dnnPrimitives:cdata(),
+      self.mkldnnInitOK,
       input:cdata(),
       gradOutput:cdata(),
       self.gradWeight:cdata(),
       self.gradBias:cdata(),
-      self.dnnPrimitives:cdata(),self.mkldnnInitOk,
       self.kW, self.kH,
       self.dW, self.dH,
       self.padW, self.padH,
-      scale,self.group
+      scale, self.group
    )
 end
 
@@ -147,6 +137,11 @@ function SpatialConvolution:__tostring__()
 end
 
 function SpatialConvolution:clearState()
+   print("================= conv")
    nn.utils.clear(self, '_input', '_gradOutput')
+   self.mkldnnInitOK =  false
+   self.firstIteration = true
+   self.dnnPrimitives = nil
    return parent.clearState(self)
 end
+

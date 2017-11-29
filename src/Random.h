@@ -15,4 +15,5 @@ inline unsigned int RandInt( RNG* rng )
     *rng = temp;
     return (unsigned long)temp;
 }
+
 #endif

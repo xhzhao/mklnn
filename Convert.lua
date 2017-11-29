@@ -71,6 +71,21 @@ local convert = function(src_model, th2mkl)
   return model
 end
 
+function paraInfo(src_layer, dst_layer)
+    if src_layer.weight then
+      dst_layer.__weightLearningRate = src_layer.__weightLearningRate
+      dst_layer.__weightWeightDecay = src_layer.__weightWeightDecay
+    end
+    if src_layer.bias then
+      dst_layer.__biasLearningRate = src_layer.__biasLearningRate
+      dst_layer.__biasWeightDecay = src_layer.__biasWeightDecay
+    end
+    dst_layer.weight:copy(src_layer.weight)
+    dst_layer.bias:copy(src_layer.bias)
+end
+
+
+
 function nn2mklnnCvt(src_module, cvtOP, prevOPFlag)
   local dst_module
   local module_type = torch.type(src_module)
@@ -273,8 +288,7 @@ function nn2mklnnlayerCvt(layer_type, src_layer, prevOPFlag, dst_module, cvtOP)
     local dW,dH = src_layer.dW, src_layer.dH
     local padW,padH = src_layer.padW, src_layer.padH
     local dst_layer = cvtOP[layer_type](nInputPlane, nOutputPlane, kW, kH, dW, dH, padW, padH)
-    dst_layer.weight:copy(src_layer.weight)
-    dst_layer.bias:copy(src_layer.bias)
+    paraInfo(src_layer, dst_layer)
     if dst_module then
       dst_module:add(dst_layer)
     else
@@ -442,10 +456,11 @@ function nn2mklnnlayerCvt(layer_type, src_layer, prevOPFlag, dst_module, cvtOP)
         dst_module = convert_layer
       end
     end
+    local src_layer_clone = src_layer:clone()
     if dst_module then
-      dst_module:add(src_layer)
+      dst_module:add(src_layer_clone)
     else 
-      dst_module = src_layer
+      dst_module = src_layer_clone
     end
     prevOPFlag = false
   end
