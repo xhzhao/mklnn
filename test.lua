@@ -1,6 +1,7 @@
 -- you can easily test specific uni：ts like this:
 -- th -lnn -e "nn.test{'LookupTable'}"
 -- th -lnn -e "nn.test{'LookupTable', 'Add'}"
+
 local mytester = torch.Tester()
 local jac
 local sjac
@@ -30,29 +31,33 @@ end
 function mklnntest.SpatialConvolution_g1()
    -- batch
    local from = math.random(1,5)
-   local to = math.random(1,5)
+   local to = math.random(1,5)+10
    local ki = math.random(1,5)
    --local kj = math.random(1,5)
    local kj = ki
    local si = math.random(1,4)
    --local sj = math.random(1,4)
    local sj = si
-   local batch = math.random(2,5)
-   local outi = math.random(4,8)
+   local batch = math.random(2,5)+20
+   local outi = math.random(4,8)+90
    --local outj = math.random(4,8)
    local outj = outi
    local ini = (outi-1)*si+ki
    local inj = (outj-1)*sj+kj
    
    local input = torch.randn(batch,from,inj,ini):float()
-   local gradOutput = torch.randn(batch,to,outj,outi):float()
-   local input_clone = input:clone():float():mkl()
-   local gradOutput_clone = gradOutput:clone():float():mkl()
+   local gradOutput = torch.randn(batch,to,outj,outi):float()-0.02
+   local input_clone = input:clone():mkl()
+   local gradOutput_clone = gradOutput:clone():mkl()
    
    local oriModule = nn.SpatialConvolution(from, to, ki, kj, si, sj):float()
    local dnnModule = mklnn.SpatialConvolution(from, to, ki, kj, si, sj):float()
-   dnnModule.weight:copy(oriModule.weight)
-   dnnModule.bias:copy(oriModule.bias)
+   dnnModule.weight = oriModule.weight:clone():float()
+   dnnModule.bias = oriModule.bias:clone():float()
+   oriModule.gradWeight:zero()
+   dnnModule.gradWeight:zero()
+   oriModule.gradBias:zero()
+   dnnModule.gradBias:zero()
    local oriOutput = oriModule:forward(input)
    local dnnOutput = dnnModule:forward(input_clone)
    dnnOutput = dnnOutput:th()
@@ -60,6 +65,19 @@ function mklnntest.SpatialConvolution_g1()
    local oriGradInput = oriModule:backward(input, gradOutput)
    local dnnGradInput = dnnModule:backward(input_clone, gradOutput_clone)
    mytester:assertTensorEq(oriGradInput, dnnGradInput:th(), 0.00001, 'mklnn.SpatialConvolution g1 gradInput')
+   local oriGradWeight = oriModule.gradWeight
+   local dnnGradWeight = dnnModule.gradWeight
+   local dnnGradWeightReshape = dnnGradWeight:resizeAs(oriGradWeight)
+   local oriGWSum = oriGradWeight:sum()
+   local dnnGWSum = dnnGradWeight:sum()
+   mytester:assertTensorEq(oriGradWeight, dnnGradWeight, 0.00001, 'mklnn.SpatialConvolution g1 gradWeight')
+   local oriGradBias = oriModule.gradBias
+   local dnnGradBias = dnnModule.gradBias
+   local oriGBSum = oriGradBias:sum()
+   local dnnGBSum = dnnGradBias:sum()
+   print("")
+   print("mklnn.SpatialConvolution g1 gradBias sum", oriGBSum, dnnGBSum)
+   mytester:assertTensorEq(oriGradBias, dnnGradBias, 0.1, 'mklnn.SpatialConvolution g1 gradBias')
 
 end
 
@@ -79,6 +97,8 @@ function mklnntest.ReLU()
    mytester:assertTensorEq(oriOutput, dnnOutput:th(), 0.00001, 'mklnn.ReLU output')
    local oriGradInput = oriModule:backward(input, gradOutput)
    local dnnGradInput = dnnModule:backward(input_clone, gradOutput_clone)
+   local oriGISum = oriGradInput:sum()
+   local dnnGISum = dnnGradInput:th():sum()
    mytester:assertTensorEq(oriGradInput, dnnGradInput:th(), 0.00001, 'mklnn.ReLU gradInput')
 end
 
@@ -86,7 +106,7 @@ end
 function mklnntest.SpatialConvolutionMKLDNN_g2()
    local batch = math.random(2,5)
    local group = math.random(2,5)
-   local partFrom = math.random(1,3)
+   local partFrom = math.random(1,3)+3
    local from = partFrom*group
    local partTo = math.random(1,3)
    local to = partTo*group
@@ -104,7 +124,8 @@ function mklnntest.SpatialConvolutionMKLDNN_g2()
    dnnModule.weight:copy(weights)
    dnnModule.bias:copy(bias)
    
-   local dnnOutput = dnnModule:forward(input:mkl()):th()
+   local dnnOutputLocal = dnnModule:forward(input:mkl()):th()
+   local dnnOutput =  dnnOutputLocal:clone()
    local gradOutput = torch.randn(dnnOutput:size()):float()
    local dnnGradInput = dnnModule:backward(input:mkl(), gradOutput:mkl()):th()
 
@@ -115,10 +136,12 @@ function mklnntest.SpatialConvolutionMKLDNN_g2()
    local convModuleT ={}
    local oriOutputT = {}
    local oriGradInputT = {}
+   local oriOutputTRepeat = {}
    
    local oriOutput = torch.Tensor(dnnOutput:size()):float()
    local oriGradInput = torch.Tensor(dnnGradInput:size()):float()
    
+   local oriOutputRepeat = torch.Tensor(dnnOutput:size()):float()
    for i = 1,group,1 do
       local rsOut = 1+(i-1)*partTo
       local reOut = i*partTo
@@ -131,14 +154,30 @@ function mklnntest.SpatialConvolutionMKLDNN_g2()
       convModuleT[i] = nn.SpatialConvolution(partFrom, partTo, ki, kj, si, sj, 1, 1):float()
       convModuleT[i].weight:copy(oriWeightT[i])
       convModuleT[i].bias:copy(oriBiasT[i])
+      convModuleT[i].gradWeight:zero()
+      convModuleT[i].gradBias:zero()
       oriOutputT[i] = convModuleT[i]:forward(oriInputT[i])
       oriGradInputT[i] = convModuleT[i]:backward(oriInputT[i], oriGradOutputT[i])
       oriOutput[{{},{rsOut,reOut},{},{}}] = oriOutputT[i]:clone()
       oriGradInput[{{},{rsIn,reIn},{},{}}] = oriGradInputT[i]:clone()
-   end
-   mytester:assertTensorEq(oriOutput, dnnOutput, 0.00001, 'mklnn.SpatialConvolution g2 output')
-   mytester:assertTensorEq(oriGradInput, dnnGradInput, 0.00001, 'mklnn.SpatialConvolution g2 gradInput')
 
+      convModuleT[i].weight = convModuleT[i].weight + convModuleT[i].gradWeight 
+      convModuleT[i].bias = convModuleT[i].bias + convModuleT[i].gradBias 
+      oriOutputTRepeat[i] = convModuleT[i]:forward(oriInputT[i])
+      oriOutputRepeat[{{},{rsOut,reOut},{},{}}] = oriOutputTRepeat[i]:clone()
+      
+   end
+   dnnModule.weight = dnnModule.weight + dnnModule.gradWeight;
+   dnnModule.bias = dnnModule.bias + dnnModule.gradBias;
+   local dnnOutputRepeat = dnnModule:forward(input:mkl()):th()
+   mytester:assertTensorEq(oriOutput, dnnOutput, 0.00001, 'mklnn.SpatialConvolution g2 output')
+   local oriGISum = oriGradInput:sum()
+   local dnnGISum = dnnGradInput:sum()
+   print("")
+   print("mklnn.SpatialConvolution g2 gradInput sum", oriGISum, dnnGISum)
+   mytester:assertTensorEq(oriGradInput, dnnGradInput, 0.00001, 'mklnn.SpatialConvolution g2 gradInput')
+   mytester:assertTensorEq(oriOutputRepeat, dnnOutputRepeat, 0.00001, 'mklnn.SpatialConvolution g2 output repeat')
+   
 end
 
 function mklnntest.SpatialMaxPooling()
@@ -288,7 +327,7 @@ function mklnntest.SpatialCrossMapLRN()
    local nbfeatures = math.random(3,8)
    
    local alpha = math.random(1,100)/100
-   local beta  = math.random(0,100)/100
+   local beta  = math.random(1,100)/100
    local k = math.random(1,3)
    
    local oriModule = nn.SpatialCrossMapLRN(size, alpha, beta, k):float()
@@ -380,9 +419,7 @@ function mklnntest.Dropout()
    local module = nn.Dropout(p,true)
    local output = module:forward(input)
    mytester:assert(math.abs(output:mean() - (1-p)) < 0.05, 'dropout output')
-   
 end
-
 
 
 mytester:add(mklnntest)

@@ -83,6 +83,9 @@ function BN:__init(nOutput, eps, momentum, affine, running_mean, running_var, we
    self.train = true
    self.momentum = momentum or 0.1
 
+   self.mkldnnInitOK =  false
+   self.firstIteration = true
+
 end
 
 function BN:reset()
@@ -97,48 +100,26 @@ function BN:reset()
 end
 
 function BN:checkInputDim(input)
-   --[[assert(input:tensor():dim() == self.nDim, string.format(
-      'only mini-batch supported (%dD tensor), got %dD tensor instead',
-      self.nDim, input:tensor():dim()))
-   assert(input:size(2) == self.running_mean:nElement(), string.format(
-      'got %d-feature tensor, expected %d',
-      input:size(2), self.running_mean:nElement()))
-   ]]--
 end
 
 local function makeContiguous(self, input, gradOutput)
-   --[[
-   if not input:isContiguous() then
-      self._input = self._input or input.new()
-      self._input:resizeAs(input):copy(input)
-      input = self._input
-   end
-   if gradOutput then
-      if not gradOutput:isContiguous() then
-         self._gradOutput = self._gradOutput or gradOutput.new()
-         self._gradOutput:resizeAs(gradOutput):copy(gradOutput)
-         gradOutput = self._gradOutput
-      end
-   end
-   ]]--
    return input, gradOutput
 end
 
 function BN:updateOutput(input)
    self:checkInputDim(input)
 
-   if self.dnnPrimitives then
-      self.mkldnnInitOk = 1
+   if self.firstIteration then
+      self.dnnPrimitives = self.dnnPrimitives and self.dnnPrimitives:zero() or torch.LongTensor(10):zero():mkl()
+      self.mkldnnInitOK = false
+      self.firstIteration = false 
    else
-      self.mkldnnInitOk = 0
+      self.mkldnnInitOK = true
    end
-   self.dnnPrimitives = self.dnnPrimitives or torch.LongTensor(15)
 
-
-   --input = makeContiguous(self, input)
    self.output = self.output:mkl()
-   --self.output:resizeAs(input)
    wrapper(getType(input),'BatchNormalization_updateOutput',
+      self.dnnPrimitives:cdata(),self.mkldnnInitOK,
       input:cdata(),
       self.output:cdata(),
       THNN.optionalTensor(self.weight),
@@ -147,8 +128,8 @@ function BN:updateOutput(input)
       self.running_var:cdata(),
       self.train,
       self.momentum,
-      self.eps,
-      self.dnnPrimitives:cdata(),self.mkldnnInitOk)
+      self.eps)
+
    return self.output
 end
 
@@ -158,25 +139,16 @@ local function backward(self, input, gradOutput, scale, gradInput, gradWeight, g
    input, gradOutput = makeContiguous(self, input, gradOutput)
    self.gradInput = self.gradInput:mkl()
    scale = scale or 1
-   --if gradInput then
-   --   gradInput:resizeAs(gradOutput)
-   --end
    
    if gradInput then
       wrapper(getType(input),'BatchNormalization_backward',
+         self.dnnPrimitives:cdata(),self.mkldnnInitOK,
          input:cdata(),
          gradOutput:cdata(),
-         --THNN.optionalTensor(gradInput),
          self.gradInput:cdata(),
          THNN.optionalTensor(gradWeight),
          THNN.optionalTensor(gradBias),
-         THNN.optionalTensor(self.weight),
-         self.running_mean:cdata(),
-         self.running_var:cdata(),
-         self.train,
-         scale,
-         self.eps,
-         self.dnnPrimitives:cdata(),self.mkldnnInitOk)
+         THNN.optionalTensor(self.weight))
    end
    return self.gradInput
 end
@@ -215,5 +187,9 @@ function BN:clearState()
       '_input',
       '_gradOutput',
    })
+   print("================= bn")
+   self.mkldnnInitOK =  false
+   self.firstIteration = true
+   self.dnnPrimitives = nil
    return parent.clearState(self)
 end

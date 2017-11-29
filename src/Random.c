@@ -3,9 +3,9 @@
 #else
 
 #define min(x,y) (x<y?x:y)
-void MKLNN_(Dropout_updateOutput)(
-  THTensor *input,
-  THTensor *output,
+
+void MKLNN_(random_bernoulli)(
+  THTensor *self,
   double p)
 {
   THArgCheck(p >= 0 && p <= 1, 1, "must be >= 0 and <= 1");
@@ -14,10 +14,12 @@ void MKLNN_(Dropout_updateOutput)(
   gettimeofday(&start,NULL);
   long seed = start.tv_sec * 1000 + (double)start.tv_usec/1000;
 
-  RNG  rng = RNGInit(seed);
+  int n = THTensor_(nElement)(self);
+  real *r = THTensor_(data)(self);
+
+  RNG rng = RNGInit(seed);
   unsigned long seedNew = RandInt(&rng);
-  int n = THTensor_(nElement)(input);
-  real *r = THTensor_(data)(output);
+
   int nthr = omp_get_max_threads();
   int *tmp = (int*)malloc(n*sizeof(int));
   #pragma omp parallel num_threads(nthr) 

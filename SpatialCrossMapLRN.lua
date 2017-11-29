@@ -14,28 +14,31 @@ function LRN:__init(size, alpha, beta, k)
    assert(self.k >= 1e-5, "k has to be greater than 1e-5")
    assert(self.beta >= 0.01, "Beta has to be > 0.01")
 
+   self.mkldnnInitOK =  false
+   self.firstIteration = true
 end
 
 function LRN:updateOutput(input)
    if self.K then self.k, self.K = self.K, nil end
-   if self.dnnPrimitives then
-      self.mkldnnInitOk = 1 
-   else
-      self.mkldnnInitOk = 0 
+   if self.firstIteration then
+      self.dnnPrimitives = self.dnnPrimitives and self.dnnPrimitives:zero() or torch.LongTensor(8):zero():mkl()
+      self.mkldnnInitOK = false
+      self.firstIteration = false
+   else 
+      self.mkldnnInitOK = true
    end 
-   self.dnnPrimitives = self.dnnPrimitives or torch.LongTensor(30)
+
    self.output = self.output:mkl()
    self.gradInput = self.gradInput:mkl()
-   --self.output:resizeAs(input)
    wrapper(getType(input),'CrossChannelLRN_updateOutput',
+      self.dnnPrimitives:cdata(),
+      self.mkldnnInitOK,
       input:cdata(),
       self.output:cdata(),
       self.size,
       self.alpha,
       self.beta,
-      self.k,
-      self.dnnPrimitives:cdata(),
-      self.mkldnnInitOk
+      self.k
       )
    return self.output
 end
@@ -43,23 +46,12 @@ end
 function LRN:updateGradInput(input, gradOutput)
    if not self.gradInput then return end
 
-   --self.gradInput:resizeAs(input)
-   --assert(gradOutput:dim() == 3 or gradOutput:dim() == 4);
-   --if not gradOutput:isContiguous() then
-   --   self._gradOutput = self._gradOutput or gradOutput.new()
-   --   self._gradOutput:resizeAs(gradOutput):copy(gradOutput)
-   --   gradOutput = self._gradOutput
-   --end
    wrapper(getType(input),'CrossChannelLRN_backward',
+      self.dnnPrimitives:cdata(),
+      self.mkldnnInitOK,
       input:cdata(),
       gradOutput:cdata(),
-      self.gradInput:cdata(),
-      self.size,
-      self.alpha,
-      self.beta,
-      self.k,
-      self.dnnPrimitives:cdata(),
-      self.mkldnnInitOk
+      self.gradInput:cdata()
       )
    return self.gradInput
 end
@@ -73,10 +65,10 @@ function LRN:write(f)
    f:writeObject(var)
 end
 
---[[
 function LRN:clearState()
-   self:clearDesc()
-   nn.utils.clear(self, '_gradOutput')
+   print("================= lrn")
+   self.dnnPrimitives = nil
+   self.mkldnnInitOK =  false
+   self.firstIteration = true
    return nn.Module.clearState(self)
 end
-]]--
