@@ -57,13 +57,11 @@ function SpatialConvolution:updateOutput(input)
       self.dnnPrimitives = self.dnnPrimitives and self.dnnPrimitives:zero() or torch.LongTensor(33):zero():mkl()
       self.mkldnnInitOK = false
       self.firstIteration = false
+      self.output = self.output:mkl()
+      self.gradInput = self.gradInput:mkl()
    else 
       self.mkldnnInitOK = true
    end 
-
-   self.output = self.output:mkl()
-   self.gradInput = self.gradInput:mkl()
-
    if self.padding then
       self.padW = self.padding
       self.padH = self.padding
@@ -137,7 +135,6 @@ function SpatialConvolution:__tostring__()
 end
 
 function SpatialConvolution:clearState()
-   print("================= conv")
    nn.utils.clear(self, '_input', '_gradOutput')
    self.mkldnnInitOK =  false
    self.firstIteration = true

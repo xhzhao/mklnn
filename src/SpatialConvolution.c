@@ -122,12 +122,13 @@ static void MKLNN_(SpatialConvolution_init_forward)(
     fprintf(stderr, "MKLDNN_ Convolution forward ouput layout match OK\n");
 #endif
   } else {
-    if(!MKLDNN_(dnnLayoutCompare)(lt_forward_conv_output, lt_user_output)) {
-      CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_forward_output_back, lt_user_output, lt_forward_conv_output), err );
-    }
     CHECK_ERR( MKLDNN_(dnnAllocateBuffer)((void**)(&buffer_forward_output), lt_forward_conv_output), err );
   }
 #endif
+
+  if(!MKLDNN_(dnnLayoutCompare)(lt_forward_conv_output, lt_user_output)) {
+    CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_forward_output_back, lt_user_output, lt_forward_conv_output), err );
+  }
 
   if(attributes) { 
     CHECK_ERR( MKLDNN_(dnnPrimitiveAttributesDestroy)(&attributes), err );
@@ -203,9 +204,6 @@ static void MKLNN_(SpatialConvolution_init_bwddata)(
   fprintf(stderr, "N=%d, gradInC=%d, gradInH=%d, gradInW=%d, kH=%d, kW=%d, dH=%d, dW=%d, padH=%d, padW=%d, gradOutC=%d, gradOutH=%d, gradOutW=%d\n", N, gradInC, gradInH, gradInW, kH, kW, dH, dW, padH, padW, gradOutC, gradOutH, gradOutW);
 #endif
 
-  dnnError_t err;
-  dnnPrimitive_t conv_bwd_data = NULL;
-
   int f_DIMENSION = DIMENSION + (group != 1);
   size_t gradInputSize[DIMENSION]  = {gradInW, gradInH, gradInC, N};
   size_t gradOutputSize[DIMENSION] = {gradOutW, gradOutH, gradOutC, N};
@@ -220,6 +218,8 @@ static void MKLNN_(SpatialConvolution_init_bwddata)(
   size_t biasSize[1]              = {gradOutputSize[2] };
   size_t biasStrides[1]           = {1};
 
+  dnnError_t err;
+  dnnPrimitive_t conv_bwd_data = NULL;
   dnnLayout_t lt_user_gradInput = NULL;
   dnnLayout_t lt_user_filter = NULL;
   dnnLayout_t lt_user_gradOutput = NULL;
@@ -245,17 +245,34 @@ static void MKLNN_(SpatialConvolution_init_bwddata)(
 
   CHECK_ERR( MKLDNN_(dnnLayoutCreate)(&lt_user_gradInput, DIMENSION, gradInputSize, gradInputStrides), err );
 
+  dnnPrimitive_t conv_forward = (dnnPrimitive_t) primitives->tensor->storage->data[CONV_PRIM_FWD];
   conv_bwd_data = (dnnPrimitive_t) (primitives->tensor->storage->data[CONV_PRIM_BWD_DATA]);
   CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_bwddata_conv_gradInput, conv_bwd_data, dnnResourceDiffSrc), err );
-  CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_bwddata_conv_filter, conv_bwd_data, dnnResourceFilter), err );
+
+
   CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_bwddata_conv_gradOutput, conv_bwd_data, dnnResourceDiffDst), err );
-
-  //get forward filter layout, convert from forward filter to bdwdata filter
-  CHECK_ERR( MKLDNN_(dnnLayoutCreate)(&lt_user_filter, f_DIMENSION, filterSize, filterStrides), err );
-
-  CHECK_ERR( MKLNN_(init_conversion)(&cvt_bwddata_filter, &buffer_bwddata_filter, lt_bwddata_conv_filter, lt_user_filter), err );
   CHECK_ERR( MKLNN_(init_conversion)(&cvt_bwddata_gradOutput, &buffer_bwddata_gradOutput, lt_bwddata_conv_gradOutput, lt_user_gradOutput), err );
 
+  CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_bwddata_conv_filter, conv_bwd_data, dnnResourceFilter), err );
+  CHECK_ERR( MKLDNN_(dnnLayoutCreate)(&lt_user_filter, f_DIMENSION, filterSize, filterStrides), err );
+  // try to reuse filter buffer 
+  if(!MKLDNN_(dnnLayoutCompare)(lt_bwddata_conv_filter, lt_user_filter)) {
+    dnnLayout_t lt_forward_conv_filter = NULL;
+    CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_forward_conv_filter, conv_forward, dnnResourceFilter), err );
+    if(!MKLDNN_(dnnLayoutCompare)(lt_bwddata_conv_filter, lt_forward_conv_filter)) {
+      dnnPrimitive_t cvt_forward_filter = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_FILTER_U2F]; 
+      if (cvt_forward_filter) {
+        CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_bwddata_filter, lt_forward_conv_filter, lt_bwddata_conv_filter), err );
+      } else {
+        CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_bwddata_filter, lt_user_filter, lt_bwddata_conv_filter), err );
+      }
+      CHECK_ERR( MKLDNN_(dnnAllocateBuffer)((void**)&buffer_bwddata_filter, lt_bwddata_conv_filter), err );
+    } else {
+      buffer_bwddata_filter = (real*)primitives->tensor->storage->data[CONV_BUFFER_FILTER_FWD];
+    }
+    CHECK_ERR( MKLDNN_(dnnLayoutDelete)(lt_forward_conv_filter), err);
+  } 
+  
 #if MKL_BUFFER_DBG
   int size1 = MKLDNN_(dnnLayoutGetMemorySize)(lt_bwddata_conv_gradInput);
   int size2 = MKLDNN_(dnnLayoutGetMemorySize)(lt_user_gradInput);
@@ -264,12 +281,13 @@ static void MKLNN_(SpatialConvolution_init_bwddata)(
     fprintf(stderr,"MKLDNN_ Convolution bwddata input layout match OK\n");
 #endif
   } else {
-    if(!MKLDNN_(dnnLayoutCompare)(lt_bwddata_conv_gradInput, lt_user_gradInput)) {
-      CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_bwddata_gradInput_back, lt_user_gradInput, lt_bwddata_conv_gradInput), err );
-    }
     CHECK_ERR( MKLDNN_(dnnAllocateBuffer)((void**)(&buffer_bwddata_gradInput), lt_bwddata_conv_gradInput), err );
   }
 #endif
+
+  if(!MKLDNN_(dnnLayoutCompare)(lt_bwddata_conv_gradInput, lt_user_gradInput)) {
+    CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_bwddata_gradInput_back, lt_user_gradInput, lt_bwddata_conv_gradInput), err );
+  }
 
   if(gradOutput_layout_create_local) {
     CHECK_ERR( MKLDNN_(dnnLayoutDelete)(lt_user_gradOutput), err);
@@ -288,7 +306,7 @@ static void MKLNN_(SpatialConvolution_init_bwddata)(
   TH_MKL_(changeWorkspace)(gradInput, gradInputWorkspace);
 
   //save the output layout to dnnPrimitive
-  primitives->tensor->storage->data[CONV_PRIM_CVT_FILTER_U2BD]            = (long)cvt_bwddata_filter;
+  primitives->tensor->storage->data[CONV_PRIM_CVT_FILTER_X2BD]            = (long)cvt_bwddata_filter;
   primitives->tensor->storage->data[CONV_PRIM_CVT_GRADOUTPUT_U2BD]        = (long)cvt_bwddata_gradOutput;
 
   primitives->tensor->storage->data[CONV_BUFFER_GRADINPUT_BWD_DATA]       = (long)buffer_bwddata_gradInput;
@@ -392,28 +410,79 @@ static void MKLNN_(SpatialConvolution_init_bwdfilter)(
     lt_user_input = input->workspace->layout;
   }
   
-  CHECK_ERR( MKLDNN_(dnnLayoutCreate)(&lt_user_gradFilter, f_DIMENSION, gradFilterSize, gradFilterStrides), err );
+  dnnPrimitive_t conv_forward = (dnnPrimitive_t) (primitives->tensor->storage->data[CONV_PRIM_FWD]);
+  dnnPrimitive_t conv_bwdData = (dnnPrimitive_t) (primitives->tensor->storage->data[CONV_PRIM_BWD_DATA]);
   conv_bwd_filter = (dnnPrimitive_t) (primitives->tensor->storage->data[CONV_PRIM_BWD_FILTER]);
+  conv_bwd_bias = (dnnPrimitive_t) (primitives->tensor->storage->data[CONV_PRIM_BWD_BIAS]);
 
-  CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_bwdfilter_conv_input,      conv_bwd_filter, dnnResourceSrc), err );
-  CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_bwdfilter_conv_gradFilter, conv_bwd_filter, dnnResourceDiffFilter), err );
+  CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_bwdfilter_conv_input, conv_bwd_filter, dnnResourceSrc), err );
+  // try to reuse input buffer 
+  if(!MKLDNN_(dnnLayoutCompare)(lt_bwdfilter_conv_input, lt_user_input)) {
+    dnnLayout_t lt_forward_conv_input = NULL;
+    CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_forward_conv_input, conv_forward, dnnResourceSrc), err );
+    if(!MKLDNN_(dnnLayoutCompare)(lt_bwdfilter_conv_input, lt_forward_conv_input)) {
+      dnnPrimitive_t cvt_forward_input = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_INPUT_U2F];
+      if (cvt_forward_input) {
+        CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_bwdfilter_input, lt_forward_conv_input, lt_bwdfilter_conv_input), err );
+      } else {
+        CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_bwdfilter_input, lt_user_input, lt_bwdfilter_conv_input), err );
+      }
+      CHECK_ERR( MKLDNN_(dnnAllocateBuffer)((void**)&buffer_bwdfilter_input, lt_bwdfilter_conv_input), err );
+    } else {
+      buffer_bwdfilter_input = (real*)primitives->tensor->storage->data[CONV_BUFFER_INPUT_FWD];
+    }
+    CHECK_ERR( MKLDNN_(dnnLayoutDelete)(lt_forward_conv_input), err);
+  }
+
   CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_bwdfilter_conv_gradOutput, conv_bwd_filter, dnnResourceDiffDst), err );
+  CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_bwdbias_conv_gradOutput, conv_bwd_bias, dnnResourceDiffDst), err );
 
-  CHECK_ERR( MKLNN_(init_conversion)(&cvt_bwdfilter_input,      &buffer_bwdfilter_input,      lt_bwdfilter_conv_input,      lt_user_input), err );
-  CHECK_ERR( MKLNN_(init_conversion)(&cvt_bwdfilter_gradOutput, &buffer_bwdfilter_gradOutput, lt_bwdfilter_conv_gradOutput, lt_user_gradOutput), err );
+  // try to reuse gradOutput buffer 
+  dnnLayout_t lt_bwddata_conv_gradOutput = NULL;
+  CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_bwddata_conv_gradOutput, conv_bwdData, dnnResourceDiffDst), err );
+  dnnPrimitive_t cvt_bwddata_gradOutput = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_GRADOUTPUT_U2BD];
+  if(MKLDNN_(dnnLayoutCompare)(lt_bwdfilter_conv_gradOutput, lt_user_gradOutput)) {
+    cvt_bwdfilter_gradOutput = NULL;
+    buffer_bwdfilter_gradOutput = NULL;
+  } else if(MKLDNN_(dnnLayoutCompare)(lt_bwdfilter_conv_gradOutput, lt_bwddata_conv_gradOutput)) {
+    buffer_bwdfilter_gradOutput = (real*) primitives->tensor->storage->data[CONV_BUFFER_GRADOUTPUT_BWD_DATA];
+  } else {
+    if (cvt_bwddata_gradOutput) {
+      CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_bwdfilter_gradOutput, lt_bwddata_conv_gradOutput, lt_bwdfilter_conv_gradOutput), err );
+    } else {
+      CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_bwdfilter_gradOutput, lt_user_gradOutput, lt_bwdfilter_conv_gradOutput), err );
+    }
+    CHECK_ERR( MKLDNN_(dnnAllocateBuffer)((void**)&buffer_bwdfilter_gradOutput, lt_bwdfilter_conv_gradOutput), err );
+  }
+
+  if(MKLDNN_(dnnLayoutCompare)(lt_bwdbias_conv_gradOutput, lt_user_gradOutput)) {
+    cvt_bwdbias_gradOutput = NULL;
+    buffer_bwdbias_gradOutput = NULL;
+  } else if(MKLDNN_(dnnLayoutCompare)(lt_bwdbias_conv_gradOutput, lt_bwddata_conv_gradOutput)) {
+    buffer_bwdbias_gradOutput = (real*) primitives->tensor->storage->data[CONV_BUFFER_GRADOUTPUT_BWD_DATA];
+  } else if(MKLDNN_(dnnLayoutCompare)(lt_bwdbias_conv_gradOutput, lt_bwdfilter_conv_gradOutput)) {
+    buffer_bwdbias_gradOutput = (real*) primitives->tensor->storage->data[CONV_BUFFER_GRADOUTPUT_BWD_FILTER];
+  } else {
+    if (cvt_bwdfilter_gradOutput) {
+      CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_bwdbias_gradOutput, lt_bwdfilter_conv_gradOutput, lt_bwdbias_conv_gradOutput), err );
+    } else if(cvt_bwdfilter_gradOutput){
+      CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_bwdbias_gradOutput, lt_bwddata_conv_gradOutput, lt_bwdbias_conv_gradOutput), err );
+    } else {
+      CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_bwdbias_gradOutput, lt_user_gradOutput, lt_bwdbias_conv_gradOutput), err );
+    }
+    CHECK_ERR( MKLDNN_(dnnAllocateBuffer)((void**)&buffer_bwdbias_gradOutput, lt_bwdbias_conv_gradOutput), err );
+  }
+  CHECK_ERR( MKLDNN_(dnnLayoutDelete)(lt_bwddata_conv_gradOutput), err);
+
+  CHECK_ERR( MKLDNN_(dnnLayoutCreate)(&lt_user_gradFilter, f_DIMENSION, gradFilterSize, gradFilterStrides), err );
+  CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_bwdfilter_conv_gradFilter, conv_bwd_filter, dnnResourceDiffFilter), err );
   CHECK_ERR( MKLNN_(init_conversion)(&cvt_bwdfilter_gradFilter, &buffer_bwdfilter_gradFilter, lt_bwdfilter_conv_gradFilter, lt_user_gradFilter), err );
-
   if(!MKLDNN_(dnnLayoutCompare)(lt_user_gradFilter, lt_bwdfilter_conv_gradFilter)) {
     CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_bwdfilter_gradFilter_back, lt_bwdfilter_conv_gradFilter, lt_user_gradFilter), err );
   }
 
   CHECK_ERR( MKLDNN_(dnnLayoutCreate)(&lt_user_gradBias, 1, gradBiasSize, gradBiasStrides), err );
-  conv_bwd_bias = (dnnPrimitive_t) (primitives->tensor->storage->data[CONV_PRIM_BWD_BIAS]);
-
   CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_bwdbias_conv_gradBias, conv_bwd_bias, dnnResourceDiffBias), err );
-  CHECK_ERR( MKLDNN_(dnnLayoutCreateFromPrimitive)(&lt_bwdbias_conv_gradOutput, conv_bwd_bias, dnnResourceDiffDst), err );
-
-  CHECK_ERR( MKLNN_(init_conversion)(&cvt_bwdbias_gradOutput, &buffer_bwdbias_gradOutput, lt_bwdbias_conv_gradOutput, lt_user_gradOutput), err );
   CHECK_ERR( MKLNN_(init_conversion)(&cvt_bwdbias_gradBias, &buffer_bwdbias_gradBias, lt_bwdbias_conv_gradBias, lt_user_gradBias), err );
   if(!MKLDNN_(dnnLayoutCompare)(lt_user_gradBias, lt_bwdbias_conv_gradBias)) {
     CHECK_ERR( MKLDNN_(dnnConversionCreate)(&cvt_bwdbias_gradBias_back, lt_bwdbias_conv_gradBias, lt_user_gradBias), err );
@@ -437,9 +506,10 @@ static void MKLNN_(SpatialConvolution_init_bwdfilter)(
   CHECK_ERR( MKLDNN_(dnnLayoutDelete)(lt_bwdbias_conv_gradOutput), err);
 
   //save the dnnPrimitive to THTensor(long int array)
-  primitives->tensor->storage->data[CONV_PRIM_CVT_INPUT_U2BF]      = (long)cvt_bwdfilter_input;
+
+  primitives->tensor->storage->data[CONV_PRIM_CVT_INPUT_X2BF]      = (long)cvt_bwdfilter_input;
   primitives->tensor->storage->data[CONV_PRIM_CVT_GRADFILTER_U2BF] = (long)cvt_bwdfilter_gradFilter;
-  primitives->tensor->storage->data[CONV_PRIM_CVT_GRADOUTPUT_U2BF] = (long)cvt_bwdfilter_gradOutput;
+  primitives->tensor->storage->data[CONV_PRIM_CVT_GRADOUTPUT_X2BF] = (long)cvt_bwdfilter_gradOutput;
   primitives->tensor->storage->data[CONV_PRIM_CVT_GRADFILTER_BF2U] = (long)cvt_bwdfilter_gradFilter_back;
 
   primitives->tensor->storage->data[CONV_BUFFER_INPUT_BWD_FILTER]      = (long)buffer_bwdfilter_input;
@@ -448,7 +518,7 @@ static void MKLNN_(SpatialConvolution_init_bwdfilter)(
 
   primitives->tensor->storage->data[CONV_PRIM_CVT_GRADBIAS_U2BB] = (long)cvt_bwdbias_gradBias;
   primitives->tensor->storage->data[CONV_PRIM_CVT_GRADBIAS_BB2U] = (long)cvt_bwdbias_gradBias_back;
-  primitives->tensor->storage->data[CONV_PRIM_CVT_GRADOUTPUT_U2BB] = (long)cvt_bwdbias_gradOutput;
+  primitives->tensor->storage->data[CONV_PRIM_CVT_GRADOUTPUT_X2BB] = (long)cvt_bwdbias_gradOutput;
 
   primitives->tensor->storage->data[CONV_BUFFER_GRADBIAS_BWD_BIAS] = (long)buffer_bwdbias_gradBias;
   primitives->tensor->storage->data[CONV_BUFFER_GRADOUTPUT_BWD_BIAS] = (long)buffer_bwdbias_gradOutput;
@@ -475,9 +545,6 @@ void MKLNN_(SpatialConvolution_forward)(
   int padH,
   int group)
 {
-  struct timeval start, init, convert, execute, end;
-  gettimeofday(&start, NULL);
-
   if(initOK == 0) {
     primitives->tensor->storage->data[MKL_INFO_TYPE] = FLOAT_TYPE;
     primitives->tensor->storage->data[MKL_INFO_PRMT]   = MKL_CONV_PRMT;
@@ -485,7 +552,6 @@ void MKLNN_(SpatialConvolution_forward)(
     int outC = weight->size[0];
     MKLNN_(SpatialConvolution_init_forward)(primitives, input, output, outC, kH, kW, dH, dW, padH, padW, group);
   }
-  gettimeofday(&init, NULL);
 
   dnnError_t err;
   dnnPrimitive_t conv_forward = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_FWD];
@@ -531,27 +597,9 @@ void MKLNN_(SpatialConvolution_forward)(
     resConv[dnnResourceBias] = buffer_forward_bias;
   }
 
-  gettimeofday(&convert, NULL);
-
   CHECK_ERR(MKLDNN_(dnnExecute)(conv_forward, (void**)resConv),err);
-  gettimeofday(&execute, NULL);
 
-
-  gettimeofday(&end, NULL);
-#if LOG_ENABLE
-  double init_t    = (init.tv_sec - start.tv_sec) * 1000 + (double)(init.tv_usec - start.tv_usec) /1000;
-  double convert_t = (convert.tv_sec - init.tv_sec) * 1000 + (double)(convert.tv_usec - init.tv_usec) /1000;
-  double exec_t    = (execute.tv_sec - convert.tv_sec) * 1000 + (double)(execute.tv_usec - convert.tv_usec) /1000;
-  double all_t     = (end.tv_sec - start.tv_sec) * 1000 + (double)(end.tv_usec - start.tv_usec) /1000;
-  fprintf(stderr,"    Conv forward init_time = %.2f ms, convert_time = %.2f, exec_time = %.2f, all_time=%.2f ms\n", init_t, convert_t, exec_t, all_t);
-#endif
-
-#if MKL_TIME
-  double all_t     = (end.tv_sec - start.tv_sec) * 1000 + (double)(end.tv_usec - start.tv_usec) /1000;
-  fprintf(stderr,"    Conv forward all_time = %.2f ms \n", all_t);
-#endif
 }
-
 
 void MKLNN_(SpatialConvolution_bwdData)(
   THMKLLongTensor *primitives,
@@ -569,17 +617,13 @@ void MKLNN_(SpatialConvolution_bwdData)(
   int padH,
   int group )
 {
-  struct timeval start, init, convert, execute, end;
-
-  gettimeofday(&start, NULL);
   if(0 == initOK) {
     MKLNN_(SpatialConvolution_init_bwddata)(primitives, input, gradOutput, gradInput, kH, kW, dH, dW, padH, padW, group);
   }
-  gettimeofday(&init, NULL);
 
   dnnError_t err;
   dnnPrimitive_t conv_bwdData = (dnnPrimitive_t) (primitives->tensor->storage->data[CONV_PRIM_BWD_DATA]);
-  dnnPrimitive_t cvt_bwddata_filter = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_FILTER_U2BD];
+  dnnPrimitive_t cvt_bwddata_filter = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_FILTER_X2BD];
   dnnPrimitive_t cvt_bwddata_gradOutput = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_GRADOUTPUT_U2BD];
 
   real *buffer_bwddata_gradInput = (real *)(primitives->tensor->storage->data[CONV_BUFFER_GRADINPUT_BWD_DATA]);
@@ -604,31 +648,22 @@ void MKLNN_(SpatialConvolution_bwdData)(
   if(cvt_bwddata_gradOutput) {
     CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwddata_gradOutput, gradOutPtr, buffer_bwddata_gradOutput), err );
     resConv[dnnResourceDiffDst] = buffer_bwddata_gradOutput;
-  }
+  } 
 
   if(cvt_bwddata_filter) {
-    CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwddata_filter, filterPtr, buffer_bwddata_filter), err );
+    real* buffer_forward_filter = (real*)(primitives->tensor->storage->data[CONV_BUFFER_FILTER_FWD]);
+    if (buffer_forward_filter) {
+      CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwddata_filter, buffer_forward_filter, buffer_bwddata_filter), err );
+    } else {
+      CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwddata_filter, filterPtr, buffer_bwddata_filter), err );
+    }
+    resConv[dnnResourceFilter] = buffer_bwddata_filter;
+  } else if (buffer_bwddata_filter) {
     resConv[dnnResourceFilter] = buffer_bwddata_filter;
   }
-  gettimeofday(&convert, NULL);
 
   CHECK_ERR(MKLDNN_(dnnExecute)(conv_bwdData, (void**)resConv),err);
-  gettimeofday(&execute, NULL);
 
-  gettimeofday(&end,NULL);
-
-#if LOG_ENABLE
-  double init_t    = (init.tv_sec - start.tv_sec) * 1000 + (double)(init.tv_usec - start.tv_usec) /1000;
-  double convert_t = (convert.tv_sec - init.tv_sec) * 1000 + (double)(convert.tv_usec - init.tv_usec) /1000;
-  double exec_t    = (execute.tv_sec - convert.tv_sec) * 1000 + (double)(execute.tv_usec - convert.tv_usec) /1000;
-  double all_t     = (end.tv_sec - start.tv_sec) * 1000 + (double)(end.tv_usec - start.tv_usec) /1000;
-  fprintf(stderr,"    Conv backward dada init_time = %.2f ms, convert_time = %.2f, exec_time = %.2f, all_time=%.2f ms\n", init_t, convert_t, exec_t, all_t);
-#endif
-
-#if MKL_TIME
-  double all_t     = (end.tv_sec - start.tv_sec) * 1000 + (double)(end.tv_usec - start.tv_usec) /1000;
-  fprintf(stderr,"    Conv backward data time = %.2f ms \n", all_t);
-#endif
 }
 
 void MKLNN_(SpatialConvolution_bwdFilter)(
@@ -647,20 +682,17 @@ void MKLNN_(SpatialConvolution_bwdFilter)(
   real scale,
   int group)
 {
-  struct timeval start, init, convert1, execute1, convert2, execute2, end;
-  gettimeofday(&start, NULL);
   if(0 == initOK) {
     MKLNN_(SpatialConvolution_init_bwdfilter)(primitives, input, gradOutput, kH, kW, dH, dW, padH, padW, group);
   }
-  gettimeofday(&init, NULL);
 
   dnnError_t err;
   dnnPrimitive_t conv_bwdFilter = (dnnPrimitive_t) (primitives->tensor->storage->data[CONV_PRIM_BWD_FILTER]);
   dnnPrimitive_t conv_bwdBias = (dnnPrimitive_t) (primitives->tensor->storage->data[CONV_PRIM_BWD_BIAS]);
 
-  dnnPrimitive_t cvt_bwdfilter_input = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_INPUT_U2BF];
+  dnnPrimitive_t cvt_bwdfilter_input = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_INPUT_X2BF];
   dnnPrimitive_t cvt_bwdfilter_gradFilter = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_GRADFILTER_U2BF];
-  dnnPrimitive_t cvt_bwdfilter_gradOutput = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_GRADOUTPUT_U2BF];
+  dnnPrimitive_t cvt_bwdfilter_gradOutput = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_GRADOUTPUT_X2BF];
   dnnPrimitive_t cvt_bwdfilter_gradFilter_back = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_GRADFILTER_BF2U];
 
   real *buffer_bwdfilter_input = (real *)(primitives->tensor->storage->data[CONV_BUFFER_INPUT_BWD_FILTER]);
@@ -668,80 +700,91 @@ void MKLNN_(SpatialConvolution_bwdFilter)(
   real *buffer_bwdfilter_gradOutput = (real *)(primitives->tensor->storage->data[CONV_BUFFER_GRADOUTPUT_BWD_FILTER]);
 
   dnnPrimitive_t cvt_bwdbias_gradBias = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_GRADBIAS_U2BB];
-  dnnPrimitive_t cvt_bwdbias_gradOutput = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_GRADOUTPUT_U2BB];
+  dnnPrimitive_t cvt_bwdbias_gradOutput = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_GRADOUTPUT_X2BB];
   dnnPrimitive_t cvt_bwdbias_gradBias_back = (dnnPrimitive_t)primitives->tensor->storage->data[CONV_PRIM_CVT_GRADBIAS_BB2U];
 
   real *buffer_bwdbias_gradBias = (real *)(primitives->tensor->storage->data[CONV_BUFFER_GRADBIAS_BWD_BIAS]);
   real *buffer_bwdbias_gradOutput = (real *)(primitives->tensor->storage->data[CONV_BUFFER_GRADOUTPUT_BWD_BIAS]);
 
-  real *inPtr = TH_MKL_(data)(input);
-  real *gradOutPtr = TH_MKL_(data)(gradOutput);
+
   real *gradFilterPtr = THTensor_(data)(gradWeight);
   real *gradBiasPtr = THTensor_(data)(gradBias);
 
   real *resConv[dnnResourceNumber] = {0};
-  resConv[dnnResourceSrc] = inPtr;
   resConv[dnnResourceDiffFilter] = gradFilterPtr;
-  resConv[dnnResourceDiffDst] = gradOutPtr;
-  resConv[dnnResourceDiffBias] = gradBiasPtr;
 
 
   real *resBias[dnnResourceNumber]= {0};
-  resBias[dnnResourceDiffDst] = gradOutPtr;
   resBias[dnnResourceDiffBias] = gradBiasPtr;
 
   if(cvt_bwdfilter_input) {
-    CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwdfilter_input, inPtr, buffer_bwdfilter_input), err );
+    real* buffer_forward_input = (real*)(primitives->tensor->storage->data[CONV_BUFFER_INPUT_FWD]);
+    if(buffer_forward_input) {
+      CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwdfilter_input, buffer_forward_input, buffer_bwdfilter_input), err );
+    } else {
+      real* inPtr = TH_MKL_(data)(input);
+      CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwdfilter_input, inPtr, buffer_bwdfilter_input), err );
+    }
     resConv[dnnResourceSrc] = buffer_bwdfilter_input;
+  } else if (buffer_bwdfilter_input) {
+    resConv[dnnResourceSrc] = buffer_bwdfilter_input;
+  } else {
+    resConv[dnnResourceSrc] = TH_MKL_(data)(input);
   }
+
   if(cvt_bwdfilter_gradOutput) {
-    CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwdfilter_gradOutput, gradOutPtr, buffer_bwdfilter_gradOutput), err );
+    real* buffer_bwddata_gradOutput = (real*)(primitives->tensor->storage->data[CONV_BUFFER_GRADOUTPUT_BWD_DATA]);
+    if (buffer_bwddata_gradOutput) {
+      CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwdfilter_gradOutput, buffer_bwddata_gradOutput, buffer_bwdfilter_gradOutput), err );
+    } else {
+      real* gradOutPtr = TH_MKL_(data)(gradOutput);
+      CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwdfilter_gradOutput, gradOutPtr, buffer_bwdfilter_gradOutput), err );
+    }
     resConv[dnnResourceDiffDst] = buffer_bwdfilter_gradOutput;
+  } else if (buffer_bwdfilter_gradOutput) { 
+    resConv[dnnResourceDiffDst] = buffer_bwdfilter_gradOutput;
+  } else {
+    resConv[dnnResourceDiffDst] = TH_MKL_(data)(gradOutput);
   }
+
   if(cvt_bwdfilter_gradFilter) {
     resConv[dnnResourceDiffFilter] = buffer_bwdfilter_gradFilter;
   }
 
-  gettimeofday(&convert1,NULL);
   CHECK_ERR( MKLDNN_(dnnExecute)(conv_bwdFilter, (void**)resConv), err);
-
   if(cvt_bwdfilter_gradFilter_back) {
     CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwdfilter_gradFilter_back, buffer_bwdfilter_gradFilter, gradFilterPtr), err );
   }
-  gettimeofday(&execute1, NULL);
 
   if(cvt_bwdbias_gradOutput) {
-    CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwdbias_gradOutput, buffer_bwdbias_gradOutput, gradOutPtr), err );
+    if (cvt_bwdfilter_gradOutput){
+      CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwdbias_gradOutput, buffer_bwdfilter_gradOutput, buffer_bwdbias_gradOutput), err );
+    } else {
+      real* buffer_bwddata_gradOutput = (real*)(primitives->tensor->storage->data[CONV_BUFFER_GRADOUTPUT_BWD_DATA]);
+      if (buffer_bwddata_gradOutput) {
+        CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwdbias_gradOutput, buffer_bwddata_gradOutput, buffer_bwdbias_gradOutput), err );
+      } else {
+        real* gradOutPtr = TH_MKL_(data)(gradOutput);
+        CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwdbias_gradOutput, gradOutPtr, buffer_bwdbias_gradOutput), err );
+      }
+    }
     resBias[dnnResourceDiffDst] = buffer_bwdbias_gradOutput;
+  } else if (buffer_bwdbias_gradOutput) {
+    resBias[dnnResourceDiffDst] = buffer_bwdbias_gradOutput;
+  } else {
+    resBias[dnnResourceDiffDst] = TH_MKL_(data)(gradOutput);
   }
 
   if(cvt_bwdbias_gradBias) {
     resBias[dnnResourceDiffBias] = buffer_bwdbias_gradBias;
   }
 
-  gettimeofday(&convert2,NULL);
   CHECK_ERR(MKLDNN_(dnnExecute)(conv_bwdBias, (void**)resBias),err);
 
   if(cvt_bwdbias_gradBias_back) {
     CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_bwdbias_gradBias_back, buffer_bwdbias_gradBias, gradBiasPtr), err );
   }
-  gettimeofday(&execute2, NULL);
 
-  gettimeofday(&end,NULL);
-#if LOG_ENABLE
-  double init_t    = (init.tv_sec - start.tv_sec) * 1000 + (double)(init.tv_usec - start.tv_usec) /1000;
-  double convert_t1 = (convert1.tv_sec - init.tv_sec) * 1000 + (double)(convert1.tv_usec - init.tv_usec) /1000;
-  double exec_t1    = (execute1.tv_sec - convert.tv_sec) * 1000 + (double)(execute1.tv_usec - convert1.tv_usec) /1000;
-  double convert_t2 = (convert2.tv_sec - init.tv_sec) * 1000 + (double)(convert2.tv_usec - execute1.tv_usec) /1000;
-  double exec_t2    = (execute2.tv_sec - convert.tv_sec) * 1000 + (double)(execute2.tv_usec - convert2.tv_usec) /1000;
-  double all_t     = (end.tv_sec - start.tv_sec) * 1000 + (double)(end.tv_usec - start.tv_usec) /1000;
-  fprintf(stderr,"    Conv backward param init_time = %.2f ms, convert1_time = %.2f, exec1_time = %.2f, convert2_time = %.2f, exec2_time = %.2f, all_time=%.2f ms\n", init_t, convert_t1, exec_t1, convert_t2, exec_t2, all_t);
-#endif
-
-#if MKL_TIME
-  double all_t     = (end.tv_sec - start.tv_sec) * 1000 + (double)(end.tv_usec - start.tv_usec) /1000;
-  fprintf(stderr,"    Conv backward data time = %.2f ms \n", all_t);
-#endif
 
 }
 #endif
