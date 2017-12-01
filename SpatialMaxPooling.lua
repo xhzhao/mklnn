@@ -35,17 +35,16 @@ function SpatialMaxPooling:updateOutput(input)
       self.dnnPrimitives = self.dnnPrimitives and self.dnnPrimitives:zero() or torch.LongTensor(14):zero():mkl()
       self.mkldnnInitOK = false
       self.firstIteration = false 
+
+      self.output = self.output:mkl() --add
+      self.gradInput = self.gradInput:mkl()
+      -- backward compatibility
+      self.ceil_mode = self.ceil_mode or false
+      self.padW = self.padW or 0
+      self.padH = self.padH or 0
    else
       self.mkldnnInitOK = true
    end
-
-   self.output = self.output:mkl() --add
-   self.gradInput = self.gradInput:mkl()
-
-   -- backward compatibility
-   self.ceil_mode = self.ceil_mode or false
-   self.padW = self.padW or 0
-   self.padH = self.padH or 0
 
     wrapper(getType(input),'SpatialMaxPooling_updateOutput',
        self.dnnPrimitives:cdata(),

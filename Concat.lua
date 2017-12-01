@@ -12,11 +12,13 @@ function Concat:__init(dimension)
 end
 
 function Concat:updateOutput(input)
-   self.outputSize = self.outputSize or torch.LongStorage()
+
+      self.outputSize = self.outputSize or torch.LongStorage()
    if self.firstIteration then
       self.dnnPrimitives = self.dnnPrimitives and self.dnnPrimitives:zero() or torch.LongTensor(5):zero():mkl()
       self.mkldnnInitOK = false
       self.firstIteration = false 
+
    else
       self.mkldnnInitOK = true
    end
@@ -38,6 +40,7 @@ function Concat:updateOutput(input)
    cdefs = string_type:gsub('torch.', 'struct TH')
    type_outs_ptr = cdefs .. "*[" .. #outs_ptr .."]"
    ffi_outs = ffi.new(type_outs_ptr, outs_ptr)
+
 
    self.output = self.output:mkl()
    self.output:resize(self.outputSize)

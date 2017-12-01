@@ -25,12 +25,13 @@ function Threshold:updateOutput(input)
       self.dnnPrimitives = self.dnnPrimitives and self.dnnPrimitives:zero() or torch.LongTensor(10):zero():mkl()
       self.mkldnnInitOK = false
       self.firstIteration = false 
+      self.gradInput = self.gradInput:mkl()
+      self.output = self.output:mkl()
+      self:validateParameters()
    else
       self.mkldnnInitOK = true
    end
-   self.gradInput = self.gradInput:mkl()
-   self.output = self.output:mkl()
-   self:validateParameters()
+
    wrapper(getType(input),'Threshold_updateOutput',
            self.dnnPrimitives:cdata(),
            self.mkldnnInitOK,
@@ -42,7 +43,9 @@ function Threshold:updateOutput(input)
 end
 
 function Threshold:updateGradInput(input, gradOutput)
-   self:validateParameters()
+   if self.firstIteration then
+     self:validateParameters()
+   end
    wrapper(getType(input),'Threshold_updateGradInput',
               self.dnnPrimitives:cdata(),
               self.mkldnnInitOK,

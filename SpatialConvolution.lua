@@ -57,17 +57,19 @@ function SpatialConvolution:updateOutput(input)
       self.dnnPrimitives = self.dnnPrimitives and self.dnnPrimitives:zero() or torch.LongTensor(33):zero():mkl()
       self.mkldnnInitOK = false
       self.firstIteration = false
+
       self.output = self.output:mkl()
       self.gradInput = self.gradInput:mkl()
+      if self.padding then
+        self.padW = self.padding
+        self.padH = self.padding
+        self.padding = nil
+      end
    else 
       self.mkldnnInitOK = true
    end 
-   if self.padding then
-      self.padW = self.padding
-      self.padH = self.padding
-      self.padding = nil
-   end
-   input = makeContiguous(self, input)
+
+  -- input = makeContiguous(self, input)
    wrapper(getType(input),'SpatialConvolution_forward',
       self.dnnPrimitives:cdata(),
       self.mkldnnInitOK,
@@ -84,7 +86,7 @@ end
 
 function SpatialConvolution:updateGradInput(input, gradOutput)
    if self.gradInput then
-      input, gradOutput = makeContiguous(self, input, gradOutput)
+--      input, gradOutput = makeContiguous(self, input, gradOutput)
       wrapper(getType(input),'SpatialConvolution_bwdData',
          self.dnnPrimitives:cdata(),
          self.mkldnnInitOK,
@@ -103,7 +105,7 @@ end
 
 function SpatialConvolution:accGradParameters(input, gradOutput, scale)
    scale = scale or 1
-   input, gradOutput = makeContiguous(self, input, gradOutput)
+--   input, gradOutput = makeContiguous(self, input, gradOutput)
    wrapper(getType(input),'SpatialConvolution_bwdFilter',
       self.dnnPrimitives:cdata(),
       self.mkldnnInitOK,

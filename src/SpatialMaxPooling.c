@@ -329,13 +329,15 @@ void MKLNN_(SpatialMaxPooling_updateGradInput)(
 
   real *resPool[dnnResourceNumber] = {0};
   resPool[dnnResourceDiffSrc] = gradInput_data;
-  resPool[dnnResourceDiffDst] = gradOutput_data;
   resPool[dnnResourceWorkspace] = buffer_workspace;
 
   if(cvt_backward_gradOutput) {
     resPool[dnnResourceDiffDst] = buffer_backward_gradOutput;
     CHECK_ERR( MKLDNN_(dnnConversionExecute)(cvt_backward_gradOutput, gradOutput_data, resPool[dnnResourceDiffDst]), err );
+  } else {
+    resPool[dnnResourceDiffDst] = gradOutput_data;
   }
+
   CHECK_ERR( MKLDNN_(dnnExecute)(pool_bwd, (void*)resPool), err );
 
 #if LOG_ENABLE || MKL_TIME
